@@ -1,0 +1,4 @@
+# Python dependencies for deployment and testing scripts
+pytezos>=3.10.0
+smartpy-cli>=0.18.0
+python-dotenv>=1.0.0

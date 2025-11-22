@@ -1,0 +1,46 @@
+{
+  "name": "tapblitz-frontend",
+  "version": "1.0.0",
+  "description": "TapBlitz - Gamified Derivatives Trading on Mavryk",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "@airgap/beacon-sdk": "^4.0.0",
+    "@taquito/taquito": "^19.0.0",
+    "@taquito/beacon-wallet": "^19.0.0",
+    "lightweight-charts": "^4.1.0",
+    "recharts": "^2.10.0",
+    "framer-motion": "^10.16.0",
+    "canvas-confetti": "^1.9.2",
+    "zustand": "^4.4.0",
+    "react-hot-toast": "^2.4.1",
+    "clsx": "^2.0.0",
+    "date-fns": "^3.0.0",
+    "axios": "^1.6.0",
+    "react-router-dom": "^6.20.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.1",
+    "@types/react-dom": "^18.3.0",
+    "@types/canvas-confetti": "^1.6.4",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "@vitejs/plugin-react": "^4.2.0",
+    "autoprefixer": "^10.4.16",
+    "eslint": "^8.55.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.5",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.3.0",
+    "vite": "^5.0.0"
+  }
+}

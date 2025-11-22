@@ -1,0 +1,39 @@
+{
+  "name": "tapblitz",
+  "version": "1.0.0",
+  "description": "One-Tap Derivatives Trading on Mavryk Blockchain",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && npm run dev",
+    "build": "npm run build:frontend && npm run build:backend",
+    "build:frontend": "cd frontend && npm run build",
+    "build:backend": "cd backend && npm run build",
+    "deploy:contracts": "cd scripts && python deploy_contracts.py",
+    "test:contracts": "cd scripts && python test_contracts.py"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/doxxedmavryk/TapBlitz"
+  },
+  "keywords": [
+    "mavryk",
+    "tezos",
+    "derivatives",
+    "trading",
+    "defi",
+    "perpetuals",
+    "options",
+    "smartpy"
+  ],
+  "author": "TapBlitz Team",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
