@@ -17,7 +17,7 @@ class IndexerService {
   };
 
   constructor() {
-    const rpcUrl = process.env.MAVRYK_RPC_URL || 'https://rpc.ghostnet.mavryk.network';
+    const rpcUrl = process.env.MAVRYK_RPC_URL || 'https://atlasnet.rpc.mavryk.network';
     this.tezos = new TezosToolkit(rpcUrl);
 
     this.contractAddresses = {

@@ -9,7 +9,7 @@ import sys
 import json
 from pytezos import pytezos
 
-def load_deployment_addresses(network='ghostnet'):
+def load_deployment_addresses(network='atlasnet'):
     """Load deployed contract addresses"""
     deployment_file = f'deployments/{network}.json'
 
@@ -133,7 +133,7 @@ def test_options(client, options_address):
 
 def main():
     """Main testing function"""
-    network = os.getenv('NETWORK', 'ghostnet')
+    network = os.getenv('NETWORK', 'atlasnet')
     admin_key = os.getenv('ADMIN_KEY', '')
 
     if not admin_key:
@@ -149,7 +149,12 @@ def main():
     addresses = load_deployment_addresses(network)
 
     # Initialize client
-    rpc_url = f'https://rpc.{network}.mavryk.network' if network != 'mainnet' else 'https://rpc.mavryk.network'
+    rpc_urls = {
+        'atlasnet': 'https://atlasnet.rpc.mavryk.network',
+        'ghostnet': 'https://rpc.ghostnet.mavryk.network',
+        'mainnet': 'https://rpc.mavryk.network'
+    }
+    rpc_url = rpc_urls.get(network, 'https://atlasnet.rpc.mavryk.network')
     client = pytezos.using(shell=rpc_url, key=admin_key)
 
     print(f"Using account: {client.key.public_key_hash()}")
