@@ -7,9 +7,18 @@ import { TezosToolkit } from '@taquito/taquito';
 import cron from 'node-cron';
 import { cacheService } from './cache.js';
 
+// Fallback RPC URLs for Mavryk Ghostnet
+const RPC_URLS = [
+  'https://rpc.ghostnet.mavryk.network',
+  'https://ghostnet.mavryk.network',
+  'https://rpc.ghostnet.mavrykdynamics.com',
+];
+
 class IndexerService {
   private tezos: TezosToolkit;
   private isRunning: boolean = false;
+  private currentRpcIndex: number = 0;
+  private consecutiveFailures: number = 0;
   private contractAddresses: {
     perpetuals: string;
     options: string;
@@ -17,7 +26,7 @@ class IndexerService {
   };
 
   constructor() {
-    const rpcUrl = process.env.MAVRYK_RPC_URL || 'https://rpc.ghostnet.mavryk.network';
+    const rpcUrl = process.env.MAVRYK_RPC_URL || RPC_URLS[0];
     this.tezos = new TezosToolkit(rpcUrl);
 
     this.contractAddresses = {
@@ -25,6 +34,65 @@ class IndexerService {
       options: process.env.OPTIONS_CONTRACT || '',
       euphToken: process.env.EUPH_TOKEN_CONTRACT || '',
     };
+  }
+
+  /**
+   * Retry an operation with exponential backoff
+   */
+  private async withRetry<T>(
+    operation: () => Promise<T>,
+    operationName: string,
+    maxRetries: number = 3,
+    initialDelayMs: number = 1000
+  ): Promise<T> {
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const result = await operation();
+        // Reset failure counter on success
+        this.consecutiveFailures = 0;
+        return result;
+      } catch (error: any) {
+        lastError = error;
+        this.consecutiveFailures++;
+
+        const isLastAttempt = attempt === maxRetries;
+        const delay = initialDelayMs * Math.pow(2, attempt);
+
+        if (!isLastAttempt) {
+          console.warn(
+            `${operationName} failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delay}ms...`,
+            error.message || error
+          );
+          await this.sleep(delay);
+
+          // Try switching RPC on persistent failures
+          if (this.consecutiveFailures >= 2) {
+            this.switchRpc();
+          }
+        }
+      }
+    }
+
+    throw lastError;
+  }
+
+  /**
+   * Switch to the next available RPC endpoint
+   */
+  private switchRpc(): void {
+    const previousIndex = this.currentRpcIndex;
+    this.currentRpcIndex = (this.currentRpcIndex + 1) % RPC_URLS.length;
+    const newRpcUrl = RPC_URLS[this.currentRpcIndex];
+
+    console.log(`Switching RPC from ${RPC_URLS[previousIndex]} to ${newRpcUrl}`);
+    this.tezos = new TezosToolkit(newRpcUrl);
+    this.consecutiveFailures = 0;
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   async start() {
@@ -74,8 +142,11 @@ class IndexerService {
     if (!this.isRunning) return;
 
     try {
-      // Get latest block
-      const block = await this.tezos.rpc.getBlock();
+      // Get latest block with retry logic
+      const block = await this.withRetry(
+        () => this.tezos.rpc.getBlock(),
+        'Get latest block'
+      );
       const blockLevel = block.header.level;
 
       // Get last indexed block from cache
@@ -90,13 +161,19 @@ class IndexerService {
       // Update last indexed block
       await cacheService.set('last_indexed_block', blockLevel.toString());
     } catch (error) {
-      console.error('Error indexing latest blocks:', error);
+      console.error('Error indexing latest blocks after retries:', error);
+      // Don't throw - allow the cron job to try again on next tick
     }
   }
 
   private async indexBlock(level: number) {
     try {
-      const block = await this.tezos.rpc.getBlock({ block: level.toString() });
+      const block = await this.withRetry(
+        () => this.tezos.rpc.getBlock({ block: level.toString() }),
+        `Get block ${level}`,
+        2, // Fewer retries for individual blocks
+        500
+      );
 
       for (const operation of block.operations.flat()) {
         if (!operation.contents) continue;
@@ -116,7 +193,8 @@ class IndexerService {
         }
       }
     } catch (error) {
-      console.error(`Error indexing block ${level}:`, error);
+      console.error(`Error indexing block ${level} after retries:`, error);
+      // Continue with next block
     }
   }
 

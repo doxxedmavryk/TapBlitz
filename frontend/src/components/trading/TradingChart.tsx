@@ -3,7 +3,7 @@
  * Uses Lightweight Charts library
  */
 
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createChart, IChartApi, ISeriesApi, CandlestickData } from 'lightweight-charts';
 import { useStore } from '@/store/useStore';
 import { RiskProfile, PositionSide } from '@/types';
