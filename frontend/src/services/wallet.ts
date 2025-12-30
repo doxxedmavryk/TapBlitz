@@ -9,7 +9,7 @@ import { NetworkType } from '@airgap/beacon-sdk';
 class WalletService {
   private wallet: BeaconWallet | null = null;
   private tezos: TezosToolkit | null = null;
-  private rpcUrl: string = 'https://rpc.ghostnet.mavryk.network';
+  private rpcUrl: string = 'https://atlasnet.rpc.mavryk.network';
 
   constructor() {
     this.initialize();
@@ -34,7 +34,8 @@ class WalletService {
     try {
       await this.wallet.requestPermissions({
         network: {
-          type: NetworkType.GHOSTNET,
+          type: NetworkType.CUSTOM,
+          name: 'atlasnet',
           rpcUrl: this.rpcUrl,
         },
       });

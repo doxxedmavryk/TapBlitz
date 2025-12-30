@@ -10,12 +10,13 @@ import json
 from pytezos import pytezos, ContractInterface
 
 # Configuration
-NETWORK = os.getenv('NETWORK', 'ghostnet')
+NETWORK = os.getenv('NETWORK', 'atlasnet')
 ADMIN_KEY = os.getenv('ADMIN_KEY', '')  # Private key or key file path
 RPC_URL = {
+    'atlasnet': 'https://atlasnet.rpc.mavryk.network',
     'ghostnet': 'https://rpc.ghostnet.mavryk.network',
     'mainnet': 'https://rpc.mavryk.network'
-}.get(NETWORK, 'https://rpc.ghostnet.mavryk.network')
+}.get(NETWORK, 'https://atlasnet.rpc.mavryk.network')
 
 def deploy_contract(contract_path, storage, contract_name):
     """Deploy a single contract"""
