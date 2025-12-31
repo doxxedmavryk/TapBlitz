@@ -3,7 +3,7 @@
  * Supports Temple, Kukai, and Umami wallets via Beacon SDK
  */
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useStore } from '@/store/useStore';
 import { walletService } from '@/services/wallet';

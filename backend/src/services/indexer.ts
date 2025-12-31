@@ -7,9 +7,32 @@ import { TezosToolkit } from '@taquito/taquito';
 import cron from 'node-cron';
 import { cacheService } from './cache.js';
 
+// Retry helper with exponential backoff
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelay: number = 1000
+): Promise<T> {
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error as Error;
+      if (attempt < maxRetries - 1) {
+        const delay = baseDelay * Math.pow(2, attempt);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  throw lastError;
+}
+
 class IndexerService {
   private tezos: TezosToolkit;
   private isRunning: boolean = false;
+  private consecutiveErrors: number = 0;
+  private maxConsecutiveErrors: number = 10;
   private contractAddresses: {
     perpetuals: string;
     options: string;
@@ -35,11 +58,13 @@ class IndexerService {
 
     this.isRunning = true;
 
-    // Index historical data
-    await this.indexHistoricalData();
+    // Index historical data (don't block on failure)
+    this.indexHistoricalData().catch(err => {
+      console.warn('Historical indexing skipped due to error:', err.message);
+    });
 
-    // Start periodic indexing (every minute)
-    cron.schedule('* * * * *', async () => {
+    // Start periodic indexing (every 2 minutes to reduce load)
+    cron.schedule('*/2 * * * *', async () => {
       await this.indexLatestBlocks();
     });
 
@@ -73,30 +98,52 @@ class IndexerService {
   private async indexLatestBlocks() {
     if (!this.isRunning) return;
 
+    // Skip if too many consecutive errors (RPC might be down)
+    if (this.consecutiveErrors >= this.maxConsecutiveErrors) {
+      console.warn('Skipping indexing due to consecutive errors. Will retry next cycle.');
+      this.consecutiveErrors = Math.max(0, this.consecutiveErrors - 1); // Slowly recover
+      return;
+    }
+
     try {
-      // Get latest block
-      const block = await this.tezos.rpc.getBlock();
+      // Get latest block with retry
+      const block = await withRetry(() => this.tezos.rpc.getBlock(), 3, 2000);
       const blockLevel = block.header.level;
 
       // Get last indexed block from cache
       const lastIndexedBlock = await cacheService.get('last_indexed_block');
-      const startBlock = lastIndexedBlock ? parseInt(lastIndexedBlock) + 1 : blockLevel - 10;
+      const startBlock = lastIndexedBlock ? parseInt(lastIndexedBlock) + 1 : blockLevel - 5;
+
+      // Limit number of blocks to index per cycle to avoid timeouts
+      const maxBlocksPerCycle = 10;
+      const endBlock = Math.min(startBlock + maxBlocksPerCycle, blockLevel);
 
       // Index blocks
-      for (let level = startBlock; level <= blockLevel; level++) {
+      for (let level = startBlock; level <= endBlock; level++) {
         await this.indexBlock(level);
       }
 
       // Update last indexed block
-      await cacheService.set('last_indexed_block', blockLevel.toString());
-    } catch (error) {
-      console.error('Error indexing latest blocks:', error);
+      await cacheService.set('last_indexed_block', endBlock.toString());
+
+      // Reset error counter on success
+      this.consecutiveErrors = 0;
+    } catch (error: any) {
+      this.consecutiveErrors++;
+      // Only log every 5th error to reduce noise
+      if (this.consecutiveErrors % 5 === 1) {
+        console.error(`Error indexing latest blocks (${this.consecutiveErrors} consecutive):`, error.message || error);
+      }
     }
   }
 
   private async indexBlock(level: number) {
     try {
-      const block = await this.tezos.rpc.getBlock({ block: level.toString() });
+      const block = await withRetry(
+        () => this.tezos.rpc.getBlock({ block: level.toString() }),
+        2,
+        1000
+      );
 
       for (const operation of block.operations.flat()) {
         if (!operation.contents) continue;
@@ -115,8 +162,9 @@ class IndexerService {
           }
         }
       }
-    } catch (error) {
-      console.error(`Error indexing block ${level}:`, error);
+    } catch (error: any) {
+      // Log block errors at debug level - these are common with unstable RPC
+      console.debug(`Error indexing block ${level}:`, error.message || error);
     }
   }
 
