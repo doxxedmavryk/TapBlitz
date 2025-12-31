@@ -3,6 +3,7 @@
  * Streak-based daily login rewards
  */
 
+import React from 'react';
 import { motion } from 'framer-motion';
 import { useStore } from '@/store/useStore';
 import confetti from 'canvas-confetti';

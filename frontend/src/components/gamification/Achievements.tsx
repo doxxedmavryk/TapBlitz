@@ -3,6 +3,7 @@
  * Display unlockable achievements
  */
 
+import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useStore } from '@/store/useStore';
 import clsx from 'clsx';

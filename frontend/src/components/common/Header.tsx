@@ -2,6 +2,7 @@
  * Main Header/Navigation Component
  */
 
+import React from 'react';
 import { useStore } from '@/store/useStore';
 import { walletService } from '@/services/wallet';
 import toast from 'react-hot-toast';
