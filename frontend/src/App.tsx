@@ -20,7 +20,37 @@ import { DailyRewards } from './components/gamification/DailyRewards';
 // Mock data generators
 import { generateMockMarkets, generateMockAchievements, generateMockDailyRewards } from './utils/mockData';
 
+// =============================================================================
+// LOGGING
+// =============================================================================
+
+const LOG_LEVELS = {
+  DEBUG: 'DEBUG',
+  INFO: 'INFO',
+  WARN: 'WARN',
+  ERROR: 'ERROR',
+} as const;
+
+const log = (level: keyof typeof LOG_LEVELS, message: string, data?: any) => {
+  const timestamp = new Date().toISOString();
+  const prefix = `[${timestamp}] [${level}] [APP]`;
+
+  if (level === 'ERROR') {
+    console.error(`${prefix} ${message}`, data || '');
+  } else if (level === 'WARN') {
+    console.warn(`${prefix} ${message}`, data || '');
+  } else {
+    console.log(`${prefix} ${message}`, data || '');
+  }
+};
+
+// Log app startup
+log('INFO', 'TapBlitz App module loaded');
+log('DEBUG', 'React environment', { nodeEnv: import.meta.env.MODE });
+
 function App() {
+  log('DEBUG', 'App component rendering...');
+
   const {
     isConnected,
     walletAddress,
@@ -34,73 +64,148 @@ function App() {
   } = useStore();
 
   const [isLoading, setIsLoading] = useState(true);
+  const [initError, setInitError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'perps' | 'options'>('perps');
 
   useEffect(() => {
+    log('INFO', 'App mounted, starting initialization...');
     initializeApp();
   }, []);
 
   useEffect(() => {
     if (isConnected && walletAddress) {
+      log('INFO', 'Wallet connected, loading user data...', { walletAddress });
       loadUserData();
     }
   }, [isConnected, walletAddress]);
 
   const initializeApp = async () => {
+    log('INFO', '=== INITIALIZING APP ===');
+    const startTime = Date.now();
+
     try {
+      // Log config
+      log('DEBUG', 'Current config', {
+        networkType: config.networkType,
+        rpcUrl: config.rpcUrl,
+        contracts: config.contracts,
+      });
+
       // Set contract addresses
+      log('DEBUG', 'Setting contract addresses...');
       contractsService.setAddresses(config.contracts);
+      log('DEBUG', 'Contract addresses set');
 
       // Set RPC URL
+      log('DEBUG', 'Setting RPC URL...', { url: config.rpcUrl });
       walletService.setRpcUrl(config.rpcUrl);
+      log('DEBUG', 'RPC URL set');
 
       // Load markets
+      log('DEBUG', 'Generating mock markets...');
       const markets = generateMockMarkets();
+      log('DEBUG', 'Markets generated', { count: markets.length });
       setMarkets(markets);
       selectMarket(markets[0]);
+      log('DEBUG', 'Markets loaded and first market selected');
 
       // Load gamification data
+      log('DEBUG', 'Loading gamification data...');
       setAchievements(generateMockAchievements());
       setDailyRewards(generateMockDailyRewards());
+      log('DEBUG', 'Gamification data loaded');
 
       // Check for existing wallet connection
+      log('DEBUG', 'Checking for existing wallet connection...');
       const activeAccount = await walletService.getActiveAccount();
       if (activeAccount) {
+        log('INFO', 'Found existing wallet connection', { address: activeAccount });
         connectWallet(activeAccount);
+      } else {
+        log('DEBUG', 'No existing wallet connection found');
       }
-    } catch (error) {
-      console.error('App initialization error:', error);
+
+      const duration = Date.now() - startTime;
+      log('INFO', `=== APP INITIALIZED SUCCESSFULLY (${duration}ms) ===`);
+    } catch (error: any) {
+      const duration = Date.now() - startTime;
+      log('ERROR', `=== APP INITIALIZATION FAILED (${duration}ms) ===`, {
+        error: error.message,
+        stack: error.stack,
+      });
+      setInitError(error.message || 'Failed to initialize app');
     } finally {
       setIsLoading(false);
+      log('DEBUG', 'Loading state set to false');
     }
   };
 
   const loadUserData = async () => {
-    if (!walletAddress) return;
+    if (!walletAddress) {
+      log('DEBUG', 'loadUserData called but no wallet address');
+      return;
+    }
+
+    log('INFO', 'Loading user data...', { walletAddress });
 
     try {
       // Load user positions
+      log('DEBUG', 'Loading user positions...');
       const positions = await contractsService.getUserPositions(walletAddress);
-      // Load user options
-      const options = await contractsService.getUserOptions(walletAddress);
+      log('DEBUG', 'User positions loaded', { count: positions.length });
 
-      // In production, fetch user stats from backend API
-    } catch (error) {
-      console.error('Error loading user data:', error);
+      // Load user options
+      log('DEBUG', 'Loading user options...');
+      const options = await contractsService.getUserOptions(walletAddress);
+      log('DEBUG', 'User options loaded', { count: options.length });
+
+      log('INFO', 'User data loaded successfully');
+    } catch (error: any) {
+      log('ERROR', 'Error loading user data', { error: error.message });
     }
   };
 
+  // Error state
+  if (initError) {
+    log('ERROR', 'Rendering error state', { initError });
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <div className="text-center max-w-md p-6">
+          <div className="text-6xl mb-4">⚠️</div>
+          <div className="text-2xl font-bold text-white mb-2">Initialization Error</div>
+          <div className="text-red-400 mb-4">{initError}</div>
+          <button
+            onClick={() => window.location.reload()}
+            className="bg-primary-500 text-white px-6 py-2 rounded-lg hover:bg-primary-600"
+          >
+            Reload App
+          </button>
+          <div className="mt-4 text-sm text-slate-500">
+            Check browser console for more details
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Loading state
   if (isLoading) {
+    log('DEBUG', 'Rendering loading state');
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <div className="text-center">
           <div className="text-6xl mb-4">⚡</div>
           <div className="text-2xl font-bold text-white mb-2">TapBlitz</div>
           <div className="text-slate-400">Loading...</div>
+          <div className="mt-4 text-sm text-slate-500">
+            Check console for initialization logs
+          </div>
         </div>
       </div>
     );
   }
+
+  log('DEBUG', 'Rendering main app UI');
 
   return (
     <div className="min-h-screen bg-slate-900 text-white">

@@ -33,17 +33,17 @@ export enum OptionStatus {
 export interface Position {
   id: number;
   owner: string;
-  side: PositionSide;
+  side: PositionSide | 'long' | 'short';
   size: number;
   collateral: number;
   entryPrice: number;
   leverage: number;
   liquidationPrice: number;
-  status: PositionStatus;
+  status: PositionStatus | 'open' | 'closed' | 'liquidated';
   openedAt: Date;
   lastFundingUpdate: Date;
   fundingAccrued: number;
-  riskProfile: RiskProfile;
+  riskProfile: RiskProfile | 'casual' | 'degenerate' | 'whale';
   unrealizedPnl?: number;
   unrealizedPnlPercent?: number;
 }
@@ -51,13 +51,13 @@ export interface Position {
 export interface Option {
   id: number;
   owner: string;
-  optionType: OptionType;
+  optionType: OptionType | 'call' | 'put';
   strikePrice: number;
   premium: number;
   size: number;
   marketId: number;
   expiry: Date;
-  status: OptionStatus;
+  status: OptionStatus | 'active' | 'exercised' | 'expired';
   createdAt: Date;
   settlementPrice?: number;
   payout?: number;
