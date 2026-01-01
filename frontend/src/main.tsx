@@ -1,3 +1,6 @@
+// Import polyfills FIRST - before any other imports
+import './polyfills';
+
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.tsx';

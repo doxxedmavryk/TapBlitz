@@ -1,6 +1,6 @@
 /**
  * Wallet Connection Modal
- * Supports Temple, Kukai, and Umami wallets via Beacon SDK
+ * Supports Mavryk Wallet, Temple, and other Beacon-compatible wallets
  */
 
 import React, { useState } from 'react';
@@ -12,39 +12,69 @@ import toast from 'react-hot-toast';
 export const WalletModal: React.FC = () => {
   const { showWalletModal, toggleWalletModal, connectWallet } = useStore();
   const [isConnecting, setIsConnecting] = useState(false);
+  const [connectingWallet, setConnectingWallet] = useState<string | null>(null);
 
   const wallets = [
     {
-      name: 'Temple',
+      id: 'mavryk',
+      name: 'Mavryk Wallet',
+      icon: '🔷',
+      color: 'from-blue-500 to-cyan-500',
+      description: 'Official Mavryk network wallet',
+      recommended: true,
+    },
+    {
+      id: 'temple',
+      name: 'Temple Wallet',
       icon: '🏛️',
-      description: 'Most popular Tezos/Mavryk wallet',
+      color: 'from-purple-500 to-pink-500',
+      description: 'Popular Tezos/Mavryk browser extension',
+      recommended: false,
     },
     {
-      name: 'Kukai',
+      id: 'kukai',
+      name: 'Kukai Wallet',
       icon: '🌊',
-      description: 'Web-based wallet with great UX',
-    },
-    {
-      name: 'Umami',
-      icon: '🍜',
-      description: 'Advanced features for power users',
+      color: 'from-cyan-500 to-blue-500',
+      description: 'Web-based wallet with social login',
+      recommended: false,
     },
   ];
 
-  const handleConnect = async () => {
+  const handleConnect = async (walletId: string) => {
     setIsConnecting(true);
+    setConnectingWallet(walletId);
 
     try {
-      const address = await walletService.connect();
-      connectWallet(address);
+      toast.loading('Connecting to wallet...', { id: 'wallet-connect' });
 
-      toast.success(`Connected: ${address.slice(0, 8)}...${address.slice(-6)}`);
-      toggleWalletModal();
+      // All wallets use Beacon SDK - the user will choose their wallet in the Beacon popup
+      const address = await walletService.connect();
+
+      if (address) {
+        connectWallet(address);
+        toast.success(`Connected: ${address.slice(0, 8)}...${address.slice(-4)}`, {
+          id: 'wallet-connect',
+          duration: 3000,
+        });
+        toggleWalletModal();
+      }
     } catch (error: any) {
       console.error('Connection error:', error);
-      toast.error(error.message || 'Failed to connect wallet');
+
+      let errorMessage = 'Failed to connect wallet';
+      if (error.message?.includes('Aborted')) {
+        errorMessage = 'Connection cancelled by user';
+      } else if (error.message?.includes('No permission')) {
+        errorMessage = 'Please approve the connection in your wallet';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      toast.error(errorMessage, { id: 'wallet-connect' });
     } finally {
       setIsConnecting(false);
+      setConnectingWallet(null);
     }
   };
 
@@ -55,14 +85,14 @@ export const WalletModal: React.FC = () => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
           onClick={toggleWalletModal}
         >
           <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.9, opacity: 0 }}
-            className="bg-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl"
+            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+            className="bg-[#1a1a2e] rounded-2xl max-w-md w-full p-6 shadow-2xl border border-pink-500/20"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
@@ -70,52 +100,94 @@ export const WalletModal: React.FC = () => {
               <h2 className="text-2xl font-bold text-white">Connect Wallet</h2>
               <button
                 onClick={toggleWalletModal}
-                className="text-slate-400 hover:text-white transition-colors"
+                className="w-8 h-8 rounded-full bg-[#2a2a3e] flex items-center justify-center text-gray-400 hover:text-white transition-colors"
               >
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
 
-            {/* Info */}
-            <p className="text-slate-300 mb-6">
-              Connect your Mavryk wallet to start trading derivatives with one tap
+            {/* Description */}
+            <p className="text-gray-400 mb-6 text-sm">
+              Connect your wallet to start trading on TapBlitz. All wallets use the secure Beacon protocol.
             </p>
 
             {/* Wallet Options */}
             <div className="space-y-3 mb-6">
               {wallets.map((wallet) => (
                 <button
-                  key={wallet.name}
-                  onClick={handleConnect}
+                  key={wallet.id}
+                  onClick={() => handleConnect(wallet.id)}
                   disabled={isConnecting}
-                  className="w-full bg-slate-700 hover:bg-slate-600 disabled:bg-slate-700 disabled:opacity-50
-                           rounded-xl p-4 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]
-                           border border-slate-600 hover:border-primary-500"
+                  className={`
+                    w-full rounded-xl p-4 transition-all duration-200
+                    ${isConnecting && connectingWallet !== wallet.id ? 'opacity-50' : ''}
+                    ${wallet.recommended
+                      ? 'bg-gradient-to-r ' + wallet.color + ' hover:opacity-90'
+                      : 'bg-[#2a2a3e] hover:bg-[#3a3a4e]'
+                    }
+                    border border-transparent hover:border-pink-500/30
+                    disabled:cursor-not-allowed
+                  `}
                 >
                   <div className="flex items-center gap-4">
-                    <div className="text-4xl">{wallet.icon}</div>
-                    <div className="flex-1 text-left">
-                      <div className="font-semibold text-white">{wallet.name}</div>
-                      <div className="text-sm text-slate-400">{wallet.description}</div>
+                    <div className={`
+                      w-12 h-12 rounded-xl flex items-center justify-center text-2xl
+                      ${wallet.recommended ? 'bg-white/20' : 'bg-[#1a1a2e]'}
+                    `}>
+                      {wallet.icon}
                     </div>
-                    {isConnecting && (
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-500"></div>
+                    <div className="flex-1 text-left">
+                      <div className="flex items-center gap-2">
+                        <span className={`font-semibold ${wallet.recommended ? 'text-white' : 'text-white'}`}>
+                          {wallet.name}
+                        </span>
+                        {wallet.recommended && (
+                          <span className="text-xs bg-white/20 text-white px-2 py-0.5 rounded-full">
+                            Recommended
+                          </span>
+                        )}
+                      </div>
+                      <div className={`text-sm ${wallet.recommended ? 'text-white/70' : 'text-gray-400'}`}>
+                        {wallet.description}
+                      </div>
+                    </div>
+                    {isConnecting && connectingWallet === wallet.id ? (
+                      <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                    ) : (
+                      <svg className={`w-5 h-5 ${wallet.recommended ? 'text-white' : 'text-gray-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
                     )}
                   </div>
                 </button>
               ))}
             </div>
 
-            {/* Disclaimer */}
-            <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-4">
+            {/* Install Wallet Link */}
+            <div className="text-center mb-4">
+              <a
+                href="https://mavryk.org/wallet"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-pink-400 hover:text-pink-300 text-sm inline-flex items-center gap-1"
+              >
+                Don't have a wallet? Get Mavryk Wallet
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </a>
+            </div>
+
+            {/* Risk Warning */}
+            <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3">
               <div className="flex gap-2">
                 <span className="text-orange-400 flex-shrink-0">⚠️</span>
-                <div className="text-sm text-orange-300">
+                <p className="text-xs text-orange-300/80">
                   <strong>Risk Warning:</strong> Trading derivatives involves significant risk.
                   Only trade with funds you can afford to lose.
-                </div>
+                </p>
               </div>
             </div>
           </motion.div>

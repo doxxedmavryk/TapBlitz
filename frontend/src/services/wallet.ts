@@ -1,10 +1,11 @@
 /**
  * Mavryk Wallet Service using Beacon SDK
+ * Uses dynamic imports to ensure polyfills are loaded first
  */
 
-import { BeaconWallet } from '@taquito/beacon-wallet';
-import { TezosToolkit } from '@taquito/taquito';
-import { NetworkType } from '@airgap/beacon-sdk';
+// Types only - these don't execute code
+import type { BeaconWallet } from '@taquito/beacon-wallet';
+import type { TezosToolkit } from '@taquito/taquito';
 
 // =============================================================================
 // LOGGING
@@ -34,7 +35,7 @@ const log = (level: keyof typeof LOG_LEVELS, message: string, data?: any) => {
 };
 
 // =============================================================================
-// WALLET SERVICE
+// WALLET SERVICE - Lazy Loading
 // =============================================================================
 
 class WalletService {
@@ -42,35 +43,69 @@ class WalletService {
   private tezos: TezosToolkit | null = null;
   private rpcUrl: string = 'https://atlasnet.rpc.mavryk.network';
   private initialized: boolean = false;
+  private initializing: boolean = false;
+  private initPromise: Promise<void> | null = null;
   private initError: Error | null = null;
 
   constructor() {
-    log('INFO', 'WalletService constructor called');
-    this.initialize();
+    log('INFO', 'WalletService constructor called (lazy initialization)');
+    // Don't initialize here - wait until first use
   }
 
-  private initialize() {
-    log('INFO', 'Initializing wallet service...', { rpcUrl: this.rpcUrl });
+  private async initialize(): Promise<void> {
+    if (this.initialized) return;
+    if (this.initPromise) return this.initPromise;
 
-    try {
-      log('DEBUG', 'Creating BeaconWallet instance...');
-      this.wallet = new BeaconWallet({
-        name: 'TapBlitz',
-        iconUrl: 'https://tapblitz.finance/icon.png',
-        appUrl: 'https://tapblitz.finance',
-      });
-      log('DEBUG', 'BeaconWallet created successfully');
+    this.initializing = true;
+    log('INFO', 'Initializing wallet service (lazy)...', { rpcUrl: this.rpcUrl });
 
-      log('DEBUG', 'Creating TezosToolkit instance...');
-      this.tezos = new TezosToolkit(this.rpcUrl);
-      this.tezos.setWalletProvider(this.wallet);
-      log('DEBUG', 'TezosToolkit configured');
+    this.initPromise = (async () => {
+      try {
+        // Dynamic imports - these load AFTER polyfills are ready
+        log('DEBUG', 'Dynamically importing Beacon SDK...');
+        const [{ BeaconWallet }, { TezosToolkit }, { NetworkType }] = await Promise.all([
+          import('@taquito/beacon-wallet'),
+          import('@taquito/taquito'),
+          import('@airgap/beacon-sdk'),
+        ]);
+        log('DEBUG', 'Beacon SDK imported successfully');
 
-      this.initialized = true;
-      log('INFO', 'Wallet service initialized successfully');
-    } catch (error: any) {
-      this.initError = error;
-      log('ERROR', 'Failed to initialize wallet service', { error: error.message, stack: error.stack });
+        // Store NetworkType for later use
+        (this as any).NetworkType = NetworkType;
+
+        log('DEBUG', 'Creating BeaconWallet instance...');
+        this.wallet = new BeaconWallet({
+          name: 'TapBlitz',
+          iconUrl: 'https://tapblitz.finance/icon.png',
+          appUrl: 'https://tapblitz.finance',
+        });
+        log('DEBUG', 'BeaconWallet created successfully');
+
+        log('DEBUG', 'Creating TezosToolkit instance...');
+        this.tezos = new TezosToolkit(this.rpcUrl);
+        this.tezos.setWalletProvider(this.wallet);
+        log('DEBUG', 'TezosToolkit configured');
+
+        this.initialized = true;
+        log('INFO', 'Wallet service initialized successfully');
+      } catch (error: any) {
+        this.initError = error;
+        log('ERROR', 'Failed to initialize wallet service', { error: error.message, stack: error.stack });
+        throw error;
+      } finally {
+        this.initializing = false;
+      }
+    })();
+
+    return this.initPromise;
+  }
+
+  private async ensureInitialized(): Promise<void> {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+    if (this.initError) {
+      throw this.initError;
     }
   }
 
@@ -84,6 +119,7 @@ class WalletService {
 
   async connect(): Promise<string> {
     log('INFO', 'Connecting wallet...');
+    await this.ensureInitialized();
 
     if (!this.wallet) {
       log('ERROR', 'Cannot connect: wallet not initialized');
@@ -91,6 +127,7 @@ class WalletService {
     }
 
     try {
+      const NetworkType = (this as any).NetworkType;
       log('DEBUG', 'Requesting permissions...', { network: 'atlasnet', rpcUrl: this.rpcUrl });
       await this.wallet.requestPermissions({
         network: {
@@ -135,6 +172,14 @@ class WalletService {
   async getActiveAccount(): Promise<string | null> {
     log('DEBUG', 'Getting active account...');
 
+    // Try to initialize, but don't fail if it doesn't work
+    try {
+      await this.ensureInitialized();
+    } catch (error) {
+      log('WARN', 'Wallet not initialized, returning null for active account');
+      return null;
+    }
+
     if (!this.wallet) {
       log('DEBUG', 'No wallet, returning null');
       return null;
@@ -153,6 +198,7 @@ class WalletService {
 
   async getBalance(address: string): Promise<number> {
     log('DEBUG', 'Getting balance...', { address });
+    await this.ensureInitialized();
 
     if (!this.tezos) {
       log('ERROR', 'Cannot get balance: Tezos not initialized');
@@ -177,6 +223,7 @@ class WalletService {
     amount: number = 0
   ): Promise<string> {
     log('INFO', 'Calling contract...', { contractAddress, entrypoint, amount });
+    await this.ensureInitialized();
 
     if (!this.tezos) {
       log('ERROR', 'Cannot call contract: Tezos not initialized');
@@ -209,6 +256,7 @@ class WalletService {
     params: any = null
   ): Promise<any> {
     log('DEBUG', 'Reading contract...', { contractAddress, viewName });
+    await this.ensureInitialized();
 
     if (!this.tezos) {
       log('ERROR', 'Cannot read contract: Tezos not initialized');
@@ -259,26 +307,6 @@ class WalletService {
   }
 }
 
-log('INFO', 'Creating WalletService singleton...');
-let walletService: WalletService;
-try {
-  walletService = new WalletService();
-  log('INFO', 'WalletService singleton created successfully');
-} catch (error: any) {
-  log('ERROR', 'CRITICAL: Failed to create WalletService singleton', { error: error.message, stack: error.stack });
-  // Create a dummy service to prevent crashes
-  walletService = {
-    isInitialized: () => false,
-    getInitError: () => error,
-    connect: async () => { throw error; },
-    disconnect: async () => {},
-    getActiveAccount: async () => null,
-    getBalance: async () => 0,
-    callContract: async () => { throw error; },
-    readContract: async () => null,
-    setRpcUrl: () => {},
-    getTezos: () => { throw error; },
-    getWallet: () => { throw error; },
-  } as any;
-}
-export { walletService };
+log('INFO', 'Creating WalletService singleton (lazy)...');
+export const walletService = new WalletService();
+log('INFO', 'WalletService singleton created (will initialize on first use)');

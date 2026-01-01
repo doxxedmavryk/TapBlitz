@@ -8,17 +8,21 @@ export default defineConfig({
     react(),
     // Polyfill Node.js modules for Beacon SDK / Taquito compatibility
     nodePolyfills({
-      include: ['buffer', 'util', 'stream', 'crypto', 'events', 'process'],
+      include: ['buffer', 'util', 'stream', 'crypto', 'events', 'process', 'path', 'os'],
       globals: {
         Buffer: true,
         global: true,
         process: true,
       },
+      protocolImports: true,
     }),
   ],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      // Force proper resolution of these modules
+      'stream': 'stream-browserify',
+      'buffer': 'buffer',
     },
   },
   server: {
@@ -33,14 +37,22 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
+    commonjsOptions: {
+      transformMixedEsModules: true,
+    },
   },
-  // Optimize deps to include Beacon SDK
+  // Optimize deps configuration
   optimizeDeps: {
-    include: ['@airgap/beacon-sdk', '@taquito/taquito', '@taquito/beacon-wallet'],
     esbuildOptions: {
       define: {
         global: 'globalThis',
       },
     },
+    // Exclude beacon-sdk from optimization to prevent bundling issues
+    exclude: ['@airgap/beacon-sdk'],
+  },
+  define: {
+    'process.env': {},
+    'global': 'globalThis',
   },
 });
