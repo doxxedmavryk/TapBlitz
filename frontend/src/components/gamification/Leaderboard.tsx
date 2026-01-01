@@ -32,11 +32,11 @@ export const Leaderboard: React.FC = () => {
             initial={{ scale: 0.9, opacity: 0, y: 20 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.9, opacity: 0, y: 20 }}
-            className="bg-slate-800 rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden shadow-2xl"
+            className="bg-[#1a1a2e] rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden shadow-2xl border border-yellow-500/20"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="bg-gradient-to-r from-yellow-600 to-orange-600 px-6 py-4 flex items-center justify-between">
+            <div className="bg-gradient-to-r from-yellow-600/20 to-orange-600/20 px-6 py-4 flex items-center justify-between border-b border-yellow-500/20">
               <div className="flex items-center gap-3">
                 <span className="text-3xl">🏆</span>
                 <h2 className="text-2xl font-bold text-white">Leaderboard</h2>
