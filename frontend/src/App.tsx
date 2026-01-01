@@ -55,6 +55,7 @@ function App() {
     isConnected,
     walletAddress,
     selectedMarket,
+    markets,
     setMarkets,
     selectMarket,
     setAchievements,
@@ -220,11 +221,11 @@ function App() {
             className="bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
             value={selectedMarket?.id || 0}
             onChange={(e) => {
-              const market = useStore.getState().markets.find((m) => m.id === Number(e.target.value));
+              const market = markets.find((m) => m.id === Number(e.target.value));
               if (market) selectMarket(market);
             }}
           >
-            {useStore.getState().markets.map((market) => (
+            {markets.map((market) => (
               <option key={market.id} value={market.id}>
                 {market.symbol}
               </option>
