@@ -260,4 +260,25 @@ class WalletService {
 }
 
 log('INFO', 'Creating WalletService singleton...');
-export const walletService = new WalletService();
+let walletService: WalletService;
+try {
+  walletService = new WalletService();
+  log('INFO', 'WalletService singleton created successfully');
+} catch (error: any) {
+  log('ERROR', 'CRITICAL: Failed to create WalletService singleton', { error: error.message, stack: error.stack });
+  // Create a dummy service to prevent crashes
+  walletService = {
+    isInitialized: () => false,
+    getInitError: () => error,
+    connect: async () => { throw error; },
+    disconnect: async () => {},
+    getActiveAccount: async () => null,
+    getBalance: async () => 0,
+    callContract: async () => { throw error; },
+    readContract: async () => null,
+    setRpcUrl: () => {},
+    getTezos: () => { throw error; },
+    getWallet: () => { throw error; },
+  } as any;
+}
+export { walletService };

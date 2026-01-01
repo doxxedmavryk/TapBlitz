@@ -48,8 +48,23 @@ const log = (level: keyof typeof LOG_LEVELS, message: string, data?: any) => {
 log('INFO', 'TapBlitz App module loaded');
 log('DEBUG', 'React environment', { nodeEnv: import.meta.env.MODE });
 
+// Track render count
+let renderCount = 0;
+
 function App() {
-  log('DEBUG', 'App component rendering...');
+  renderCount++;
+  log('DEBUG', `App component rendering... (render #${renderCount})`);
+
+  // Track store access
+  log('DEBUG', 'Accessing useStore...');
+  let storeData;
+  try {
+    storeData = useStore();
+    log('DEBUG', 'useStore access successful');
+  } catch (error: any) {
+    log('ERROR', 'useStore access FAILED', { error: error.message, stack: error.stack });
+    throw error;
+  }
 
   const {
     isConnected,
@@ -62,7 +77,13 @@ function App() {
     setDailyRewards,
     connectWallet,
     config,
-  } = useStore();
+  } = storeData;
+
+  log('DEBUG', 'Store data extracted', {
+    isConnected,
+    hasSelectedMarket: !!selectedMarket,
+    marketsCount: markets?.length ?? 0
+  });
 
   const [isLoading, setIsLoading] = useState(true);
   const [initError, setInitError] = useState<string | null>(null);
@@ -193,13 +214,13 @@ function App() {
   if (isLoading) {
     log('DEBUG', 'Rendering loading state');
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-6xl mb-4">⚡</div>
-          <div className="text-2xl font-bold text-white mb-2">TapBlitz</div>
-          <div className="text-slate-400">Loading...</div>
-          <div className="mt-4 text-sm text-slate-500">
-            Check console for initialization logs
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center" style={{ minHeight: '100vh', backgroundColor: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="text-center" style={{ textAlign: 'center' }}>
+          <div className="text-6xl mb-4" style={{ fontSize: '48px', marginBottom: '16px' }}>⚡</div>
+          <div className="text-2xl font-bold text-white mb-2" style={{ fontSize: '24px', fontWeight: 'bold', color: 'white', marginBottom: '8px' }}>TapBlitz</div>
+          <div className="text-slate-400" style={{ color: '#94a3b8' }}>Loading...</div>
+          <div className="mt-4 text-sm text-slate-500" style={{ marginTop: '16px', fontSize: '14px', color: '#64748b' }}>
+            Initializing app - check debug panel below
           </div>
         </div>
       </div>
