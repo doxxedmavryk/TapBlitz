@@ -376,4 +376,28 @@ class ContractsService {
 }
 
 log('INFO', 'Creating ContractsService singleton...');
-export const contractsService = new ContractsService();
+let contractsService: ContractsService;
+try {
+  contractsService = new ContractsService();
+  log('INFO', 'ContractsService singleton created successfully');
+} catch (error: any) {
+  log('ERROR', 'CRITICAL: Failed to create ContractsService singleton', { error: error.message, stack: error.stack });
+  // Create a dummy service to prevent crashes
+  contractsService = {
+    setAddresses: () => {},
+    isInitialized: () => false,
+    openPosition: async () => { throw error; },
+    closePosition: async () => { throw error; },
+    liquidatePosition: async () => { throw error; },
+    getUserPositions: async () => [],
+    buyOption: async () => { throw error; },
+    claimOptionPayout: async () => { throw error; },
+    getUserOptions: async () => [],
+    getEUPHBalance: async () => 0,
+    stakeEUPH: async () => { throw error; },
+    unstakeEUPH: async () => { throw error; },
+    claimRewards: async () => { throw error; },
+    getPrice: async () => 0,
+  } as any;
+}
+export { contractsService };

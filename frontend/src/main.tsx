@@ -7,18 +7,70 @@ import './index.css';
 // STARTUP LOGGING
 // =============================================================================
 
+const logs: string[] = [];
+
 const log = (level: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR', message: string, data?: any) => {
   const timestamp = new Date().toISOString();
   const prefix = `[${timestamp}] [${level}] [MAIN]`;
+  const logMessage = `${prefix} ${message}`;
+
+  logs.push(logMessage + (data ? ' ' + JSON.stringify(data) : ''));
 
   if (level === 'ERROR') {
-    console.error(`${prefix} ${message}`, data || '');
+    console.error(logMessage, data || '');
   } else if (level === 'WARN') {
-    console.warn(`${prefix} ${message}`, data || '');
+    console.warn(logMessage, data || '');
   } else {
-    console.log(`${prefix} ${message}`, data || '');
+    console.log(logMessage, data || '');
+  }
+
+  // Update debug panel if it exists
+  updateDebugPanel();
+};
+
+const updateDebugPanel = () => {
+  const panel = document.getElementById('debug-panel-logs');
+  if (panel) {
+    panel.textContent = logs.slice(-20).join('\n');
   }
 };
+
+// Create visible debug panel immediately (before any React)
+const createDebugPanel = () => {
+  const debugPanel = document.createElement('div');
+  debugPanel.id = 'debug-panel';
+  debugPanel.style.cssText = `
+    position: fixed;
+    bottom: 10px;
+    left: 10px;
+    right: 10px;
+    max-height: 200px;
+    background: rgba(0,0,0,0.9);
+    color: #0f0;
+    font-family: monospace;
+    font-size: 11px;
+    padding: 10px;
+    z-index: 99999;
+    overflow: auto;
+    border: 1px solid #0f0;
+    border-radius: 4px;
+  `;
+  debugPanel.innerHTML = `
+    <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+      <strong>TapBlitz Debug Panel</strong>
+      <button onclick="this.parentElement.parentElement.remove()" style="background:#f00;color:#fff;border:none;padding:2px 8px;cursor:pointer;">X</button>
+    </div>
+    <div id="debug-panel-logs" style="white-space:pre-wrap;word-break:break-all;"></div>
+  `;
+  document.body.appendChild(debugPanel);
+};
+
+// Create panel immediately
+if (document.body) {
+  createDebugPanel();
+} else {
+  document.addEventListener('DOMContentLoaded', createDebugPanel);
+}
 
 log('INFO', '========================================');
 log('INFO', '  TapBlitz Frontend Starting...');
@@ -29,6 +81,7 @@ log('INFO', 'Environment', {
   prod: import.meta.env.PROD,
   baseUrl: import.meta.env.BASE_URL,
 });
+log('INFO', 'Window location', { href: window.location.href, port: window.location.port });
 
 // =============================================================================
 // ERROR BOUNDARY
@@ -152,6 +205,7 @@ window.onunhandledrejection = (event) => {
 // RENDER APPLICATION
 // =============================================================================
 
+log('INFO', 'Looking for root element...');
 const rootElement = document.getElementById('root');
 
 if (!rootElement) {
@@ -165,12 +219,14 @@ if (!rootElement) {
     </div>
   `;
 } else {
-  log('INFO', 'Root element found, creating React root...');
+  log('INFO', 'Root element found', { id: rootElement.id, tagName: rootElement.tagName });
 
   try {
+    log('DEBUG', 'Creating React root...');
     const root = ReactDOM.createRoot(rootElement);
-    log('DEBUG', 'React root created, rendering app...');
+    log('DEBUG', 'React root created successfully');
 
+    log('DEBUG', 'Calling root.render()...');
     root.render(
       <React.StrictMode>
         <ErrorBoundary>
@@ -179,7 +235,17 @@ if (!rootElement) {
       </React.StrictMode>
     );
 
-    log('INFO', 'React app render initiated');
+    log('INFO', 'React app render() called - React should now take over');
+
+    // Check if something rendered after a short delay
+    setTimeout(() => {
+      const rootContent = rootElement.innerHTML;
+      if (rootContent.trim() === '') {
+        log('ERROR', 'Root element is EMPTY after 500ms - React may have failed to render');
+      } else {
+        log('INFO', 'Root element has content', { contentLength: rootContent.length });
+      }
+    }, 500);
   } catch (error: any) {
     log('ERROR', 'Failed to render React app', { error: error.message, stack: error.stack });
     rootElement.innerHTML = `

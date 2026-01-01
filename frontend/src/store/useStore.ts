@@ -15,6 +15,38 @@ import type {
   AppConfig,
 } from '@/types';
 
+// =============================================================================
+// LOGGING
+// =============================================================================
+
+const log = (level: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR', message: string, data?: any) => {
+  const timestamp = new Date().toISOString();
+  const prefix = `[${timestamp}] [${level}] [STORE]`;
+
+  if (level === 'ERROR') {
+    console.error(`${prefix} ${message}`, data || '');
+  } else if (level === 'WARN') {
+    console.warn(`${prefix} ${message}`, data || '');
+  } else {
+    console.log(`${prefix} ${message}`, data || '');
+  }
+};
+
+log('INFO', 'Store module loading...');
+
+// Clear any potentially corrupted storage on first load
+try {
+  const stored = localStorage.getItem('tapblitz-storage');
+  if (stored) {
+    log('DEBUG', 'Found existing storage', { length: stored.length });
+    JSON.parse(stored); // Try parsing to check validity
+    log('DEBUG', 'Existing storage is valid JSON');
+  }
+} catch (error: any) {
+  log('WARN', 'Clearing corrupted storage', { error: error.message });
+  localStorage.removeItem('tapblitz-storage');
+}
+
 interface AppState {
   // User state
   user: User | null;
@@ -70,10 +102,14 @@ interface AppState {
   setConfig: (config: Partial<AppConfig>) => void;
 }
 
+log('INFO', 'Creating Zustand store...');
+
 export const useStore = create<AppState>()(
   devtools(
     persist(
-      (set, get) => ({
+      (set, get) => {
+        log('DEBUG', 'Store initializer function called');
+        return {
         // Initial state
         user: null,
         isConnected: false,
@@ -236,7 +272,8 @@ export const useStore = create<AppState>()(
           set((state) => ({
             config: { ...state.config, ...config },
           })),
-      }),
+      }
+      },
       {
         name: 'tapblitz-storage',
         partialize: (state) => ({
@@ -248,3 +285,5 @@ export const useStore = create<AppState>()(
     )
   )
 );
+
+log('INFO', 'Zustand store created successfully');
