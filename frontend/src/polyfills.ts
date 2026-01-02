@@ -1,26 +1,33 @@
 /**
  * Polyfills for Beacon SDK / Taquito compatibility
  * This file must be imported FIRST before any other imports
+ *
+ * Note: index.html has a synchronous Buffer shim that loads before this.
+ * This module enhances it with the full buffer implementation.
  */
 
-import { Buffer } from 'buffer';
+import { Buffer as BufferModule } from 'buffer';
 
-// Setup global polyfills
+// Enhance global polyfills with full buffer module
 if (typeof window !== 'undefined') {
-  // Buffer
-  (window as any).Buffer = Buffer;
+  // Replace the shim with full Buffer implementation
+  (window as any).Buffer = BufferModule;
   (window as any).global = window;
+
+  // Also set on globalThis for Node.js style access
+  (globalThis as any).Buffer = BufferModule;
 
   // Process
   if (!(window as any).process) {
     (window as any).process = {
       env: {},
-      version: '',
-      nextTick: (fn: Function) => setTimeout(fn, 0),
+      version: 'v16.0.0',
+      browser: true,
+      nextTick: (fn: Function) => Promise.resolve().then(() => fn()),
     };
   }
+
+  console.log('[POLYFILLS] Full Buffer module loaded:', typeof BufferModule, 'slice:', typeof BufferModule.prototype?.slice);
 }
 
-console.log('[POLYFILLS] Buffer and global polyfills initialized');
-
-export {};
+export { BufferModule as Buffer };
