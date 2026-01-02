@@ -129,13 +129,18 @@ export const useStore = create<AppState>()(
         soundEnabled: true,
         animationsEnabled: true,
         config: {
-          networkType: 'ghostnet',
-          rpcUrl: 'https://rpc.ghostnet.mavryk.network',
+          networkType: 'atlasnet',
+          rpcUrl: 'https://atlasnet.rpc.mavryk.network',
           contracts: {
             perpetuals: '',
             options: '',
             euphToken: '',
             oracle: '',
+            // Mavryk DEX contracts
+            router: 'KT1RRPjU5q12uPf5E2xGJodU8VA99skWKcmJ',
+            usdt: 'KT1D7ZQBhwxkMgZThqctYtMXigFvJRZL4eSy',
+            pool: 'KT1Mp34odc6bZLbZzY1BXb5m4KSHZcZswHcY',
+            nativeMvrk: 'mv2ZZZZZZZZZZZZZZZZZZZZZZZZZZZDXMF2d',
           },
           maxSlippage: 0.01,
           minCollateral: 1,
