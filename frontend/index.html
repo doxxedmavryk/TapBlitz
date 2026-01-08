@@ -7,6 +7,175 @@
     <meta name="description" content="TapBlitz - Gamified derivatives trading on Mavryk blockchain. Trade BTC and ETH perpetuals and options with one tap." />
     <meta name="keywords" content="Mavryk, Tezos, derivatives, trading, DeFi, crypto, options, perpetuals" />
     <title>TapBlitz - One-Tap Derivatives Trading</title>
+    <!-- Critical: Buffer polyfill must load SYNCHRONOUSLY before any ES modules -->
+    <script>
+      // Minimal Buffer polyfill for readable-stream compatibility
+      (function() {
+        'use strict';
+
+        // Set up global
+        if (typeof window !== 'undefined') {
+          window.global = window;
+
+          // Process mock
+          if (!window.process) {
+            window.process = {
+              env: {},
+              version: 'v16.0.0',
+              browser: true,
+              nextTick: function(fn) { Promise.resolve().then(fn); }
+            };
+          }
+
+          // Buffer shim - will be replaced by full buffer module but needs basic structure
+          if (!window.Buffer) {
+            // Minimal Buffer implementation for readable-stream bootstrap
+            var BufferShim = function(arg, encoding) {
+              if (!(this instanceof BufferShim)) {
+                return new BufferShim(arg, encoding);
+              }
+              if (typeof arg === 'number') {
+                this._data = new Uint8Array(arg);
+              } else if (typeof arg === 'string') {
+                var encoder = new TextEncoder();
+                this._data = encoder.encode(arg);
+              } else if (arg instanceof Uint8Array) {
+                this._data = new Uint8Array(arg);
+              } else if (Array.isArray(arg)) {
+                this._data = new Uint8Array(arg);
+              } else {
+                this._data = new Uint8Array(0);
+              }
+              this.length = this._data.length;
+              // Copy bytes to indexed properties
+              for (var i = 0; i < this.length; i++) {
+                this[i] = this._data[i];
+              }
+            };
+
+            BufferShim.isBuffer = function(obj) {
+              return obj instanceof BufferShim || (obj && obj._isBuffer === true);
+            };
+
+            BufferShim.from = function(data, encoding) {
+              return new BufferShim(data, encoding);
+            };
+
+            BufferShim.alloc = function(size, fill) {
+              var buf = new BufferShim(size);
+              if (fill !== undefined) {
+                for (var i = 0; i < size; i++) buf[i] = fill;
+              }
+              return buf;
+            };
+
+            BufferShim.allocUnsafe = function(size) {
+              return new BufferShim(size);
+            };
+
+            BufferShim.concat = function(list, length) {
+              if (list.length === 0) return new BufferShim(0);
+              var totalLength = length !== undefined ? length : list.reduce(function(acc, buf) {
+                return acc + buf.length;
+              }, 0);
+              var result = new BufferShim(totalLength);
+              var offset = 0;
+              for (var i = 0; i < list.length; i++) {
+                var buf = list[i];
+                for (var j = 0; j < buf.length && offset < totalLength; j++) {
+                  result[offset++] = buf[j];
+                }
+              }
+              return result;
+            };
+
+            BufferShim.byteLength = function(str, encoding) {
+              if (typeof str === 'string') {
+                return new TextEncoder().encode(str).length;
+              }
+              return str.length || 0;
+            };
+
+            BufferShim.prototype._isBuffer = true;
+
+            BufferShim.prototype.slice = function(start, end) {
+              start = start || 0;
+              end = end === undefined ? this.length : end;
+              if (start < 0) start = Math.max(this.length + start, 0);
+              if (end < 0) end = Math.max(this.length + end, 0);
+              var sliced = new BufferShim(end - start);
+              for (var i = start; i < end; i++) {
+                sliced[i - start] = this[i];
+              }
+              return sliced;
+            };
+
+            BufferShim.prototype.copy = function(target, targetStart, sourceStart, sourceEnd) {
+              targetStart = targetStart || 0;
+              sourceStart = sourceStart || 0;
+              sourceEnd = sourceEnd === undefined ? this.length : sourceEnd;
+              for (var i = sourceStart; i < sourceEnd; i++) {
+                target[targetStart + i - sourceStart] = this[i];
+              }
+              return sourceEnd - sourceStart;
+            };
+
+            BufferShim.prototype.fill = function(val, start, end) {
+              start = start || 0;
+              end = end || this.length;
+              for (var i = start; i < end; i++) this[i] = val;
+              return this;
+            };
+
+            BufferShim.prototype.toString = function(encoding, start, end) {
+              start = start || 0;
+              end = end || this.length;
+              var arr = [];
+              for (var i = start; i < end; i++) arr.push(this[i]);
+              return new TextDecoder().decode(new Uint8Array(arr));
+            };
+
+            BufferShim.prototype.write = function(str, offset, length, encoding) {
+              offset = offset || 0;
+              var encoded = new TextEncoder().encode(str);
+              length = length === undefined ? encoded.length : Math.min(length, encoded.length);
+              for (var i = 0; i < length; i++) {
+                this[offset + i] = encoded[i];
+              }
+              return length;
+            };
+
+            BufferShim.prototype.readUInt8 = function(offset) { return this[offset]; };
+            BufferShim.prototype.writeUInt8 = function(value, offset) { this[offset] = value; return offset + 1; };
+
+            BufferShim.prototype.readUInt32BE = function(offset) {
+              return (this[offset] << 24) | (this[offset+1] << 16) | (this[offset+2] << 8) | this[offset+3];
+            };
+
+            BufferShim.prototype.writeUInt32BE = function(value, offset) {
+              this[offset] = (value >>> 24) & 0xff;
+              this[offset+1] = (value >>> 16) & 0xff;
+              this[offset+2] = (value >>> 8) & 0xff;
+              this[offset+3] = value & 0xff;
+              return offset + 4;
+            };
+
+            BufferShim.prototype.readInt32BE = function(offset) {
+              var val = this.readUInt32BE(offset);
+              return val > 0x7fffffff ? val - 0x100000000 : val;
+            };
+
+            BufferShim.prototype.writeInt32BE = function(value, offset) {
+              return this.writeUInt32BE(value >>> 0, offset);
+            };
+
+            window.Buffer = BufferShim;
+          }
+
+          console.log('[HTML-POLYFILL] Buffer shim loaded:', typeof window.Buffer, 'slice:', typeof window.Buffer.prototype.slice);
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
