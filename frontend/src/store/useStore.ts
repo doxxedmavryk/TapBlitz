@@ -129,14 +129,16 @@ export const useStore = create<AppState>()(
         soundEnabled: true,
         animationsEnabled: true,
         config: {
-          networkType: 'atlasnet',
-          rpcUrl: 'https://atlasnet.rpc.mavryk.network',
+          // Mavryk Mainnet configuration
+          networkType: 'mainnet',
+          rpcUrl: 'https://rpc.mavryk.network',
           contracts: {
-            perpetuals: '',
-            options: '',
-            euphToken: '',
-            oracle: '',
-            // Mavryk DEX contracts
+            // Trading contracts (to be deployed)
+            perpetuals: 'KT1_PERPETUALS_MAINNET',
+            options: 'KT1_OPTIONS_MAINNET',
+            euphToken: 'KT1_EUPH_MAINNET',
+            oracle: 'KT1_ORACLE_MAINNET',
+            // Mavryk DEX contracts (mainnet)
             router: 'KT1RRPjU5q12uPf5E2xGJodU8VA99skWKcmJ',
             usdt: 'KT1D7ZQBhwxkMgZThqctYtMXigFvJRZL4eSy',
             pool: 'KT1Mp34odc6bZLbZzY1BXb5m4KSHZcZswHcY',
@@ -144,7 +146,7 @@ export const useStore = create<AppState>()(
           },
           maxSlippage: 0.01,
           minCollateral: 1,
-          maxCollateral: 1000,
+          maxCollateral: 10000,
           enableSounds: true,
           enableAnimations: true,
           chartInterval: '15m',

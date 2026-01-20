@@ -152,10 +152,17 @@ export interface ContractAddresses {
   options: string;
   euphToken: string;
   oracle: string;
+  // DEX contracts
+  router: string;
+  usdt: string;
+  pool: string;
+  nativeMvrk: string;
 }
 
+export type NetworkType = 'mainnet' | 'ghostnet' | 'atlasnet';
+
 export interface AppConfig {
-  networkType: 'mainnet' | 'ghostnet';
+  networkType: NetworkType;
   rpcUrl: string;
   contracts: ContractAddresses;
   maxSlippage: number;
@@ -165,6 +172,18 @@ export interface AppConfig {
   enableAnimations: boolean;
   chartInterval: string;
 }
+
+// Risk profile leverage mapping
+export const RISK_PROFILE_LEVERAGE: Record<RiskProfile, number> = {
+  [RiskProfile.CASUAL]: 5,
+  [RiskProfile.DEGENERATE]: 20,
+  [RiskProfile.WHALE]: 10,
+};
+
+// Trading fee constants
+export const TRADING_FEE_PERCENT = 0.003; // 0.3%
+export const LIQUIDATION_FEE_PERCENT = 0.01; // 1%
+export const MAINTENANCE_MARGIN_PERCENT = 0.1; // 10%
 
 export interface NotificationPayload {
   type: 'success' | 'error' | 'warning' | 'info';

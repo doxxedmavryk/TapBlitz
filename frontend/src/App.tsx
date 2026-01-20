@@ -1,5 +1,6 @@
 /**
- * TapBlitz - Euphoria-style One-Tap Trading App
+ * TapBlitz - One-Tap Trading Platform on Mavryk
+ * PRD Reference: Main Application
  */
 
 import { useEffect, useState } from 'react';
@@ -9,14 +10,18 @@ import { walletService } from './services/wallet';
 import { contractsService } from './services/contracts';
 
 // Components
-import { TradingGrid } from './components/trading/TradingGrid';
+import { TradingChart } from './components/trading/TradingChart';
+import { PositionsPanel } from './components/trading/PositionsPanel';
+import { OptionsWeekly } from './components/options/OptionsWeekly';
 import { BottomNav } from './components/common/BottomNav';
+import { Header } from './components/common/Header';
 import { WalletModal } from './components/wallet/WalletModal';
 import { Leaderboard } from './components/gamification/Leaderboard';
 import { Achievements } from './components/gamification/Achievements';
+import { DailyRewards } from './components/gamification/DailyRewards';
 
 // Mock data generators
-import { generateMockMarkets, generateMockAchievements, generateMockDailyRewards } from './utils/mockData';
+import { generateMockMarkets, generateMockAchievements, generateMockDailyRewards, generateMockLeaderboard } from './utils/mockData';
 
 // =============================================================================
 // LOGGING
@@ -37,6 +42,8 @@ const log = (level: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR', message: string, data?:
 
 log('INFO', 'TapBlitz App module loaded');
 
+type TabType = 'trade' | 'options' | 'profile';
+
 function App() {
   const {
     isConnected,
@@ -45,8 +52,11 @@ function App() {
     selectMarket,
     setAchievements,
     setDailyRewards,
+    setLeaderboard,
     connectWallet,
     config,
+    showLeaderboard,
+    showAchievements,
     toggleLeaderboard,
     toggleAchievements,
     toggleWalletModal,
@@ -54,8 +64,9 @@ function App() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [initError, setInitError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'trade' | 'leaderboard' | 'profile'>('trade');
+  const [activeTab, setActiveTab] = useState<TabType>('trade');
   const [showSettings, setShowSettings] = useState(false);
+  const [showDailyRewards, setShowDailyRewards] = useState(false);
 
   useEffect(() => {
     log('INFO', 'App mounted, starting initialization...');
@@ -78,14 +89,15 @@ function App() {
       contractsService.setAddresses(config.contracts);
       walletService.setRpcUrl(config.rpcUrl);
 
-      // Load markets
+      // Load markets (MVRK/USDT only)
       const markets = generateMockMarkets();
       setMarkets(markets);
-      selectMarket(markets[1]); // ETH/USD for Euphoria-style UI
+      selectMarket(markets[0]); // MVRK/USDT
 
       // Load gamification data
       setAchievements(generateMockAchievements());
       setDailyRewards(generateMockDailyRewards());
+      setLeaderboard(generateMockLeaderboard());
 
       // Check for existing wallet connection
       const activeAccount = await walletService.getActiveAccount();
@@ -116,14 +128,14 @@ function App() {
     }
   };
 
-  const handleTabChange = (tab: 'trade' | 'leaderboard' | 'profile') => {
+  const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
-    if (tab === 'leaderboard') {
-      toggleLeaderboard();
-    } else if (tab === 'profile') {
+
+    if (tab === 'profile') {
       if (!isConnected) {
         toggleWalletModal();
       } else {
+        // Show achievements/profile modal
         toggleAchievements();
       }
     }
@@ -132,7 +144,7 @@ function App() {
   // Error state
   if (initError) {
     return (
-      <div className="min-h-screen bg-[#1a0a1a] flex items-center justify-center">
+      <div className="min-h-screen bg-[#0D0D0F] flex items-center justify-center">
         <div className="text-center max-w-md p-6">
           <div className="text-6xl mb-4">⚠️</div>
           <div className="text-2xl font-bold text-white mb-2">Oops!</div>
@@ -151,7 +163,7 @@ function App() {
   // Loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#1a0a1a] flex items-center justify-center">
+      <div className="min-h-screen bg-[#0D0D0F] flex items-center justify-center">
         <div className="text-center">
           <div className="text-5xl mb-4 animate-pulse">⚡</div>
           <div className="text-2xl font-bold text-pink-500 mb-2">TapBlitz</div>
@@ -162,9 +174,33 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#1a0a1a] text-white">
-      {/* Main Trading Grid */}
-      <TradingGrid onSettingsClick={() => setShowSettings(true)} />
+    <div className="min-h-screen bg-[#0D0D0F] text-white pb-20">
+      {/* Header */}
+      <Header
+        onSettingsClick={() => setShowSettings(true)}
+        onRewardsClick={() => setShowDailyRewards(true)}
+        onLeaderboardClick={toggleLeaderboard}
+      />
+
+      {/* Main Content */}
+      <main className="px-4 pt-4">
+        {activeTab === 'trade' && (
+          <div className="space-y-4">
+            <TradingChart />
+            <PositionsPanel />
+          </div>
+        )}
+
+        {activeTab === 'options' && (
+          <OptionsWeekly />
+        )}
+
+        {activeTab === 'profile' && isConnected && (
+          <div className="space-y-4">
+            {/* Profile content will show in achievements modal */}
+          </div>
+        )}
+      </main>
 
       {/* Bottom Navigation */}
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
@@ -173,6 +209,9 @@ function App() {
       <WalletModal />
       <Leaderboard />
       <Achievements />
+      {showDailyRewards && (
+        <DailyRewards onClose={() => setShowDailyRewards(false)} />
+      )}
 
       {/* Settings Modal */}
       {showSettings && (
@@ -181,14 +220,14 @@ function App() {
           onClick={() => setShowSettings(false)}
         >
           <div
-            className="bg-[#1a1a2e] rounded-2xl max-w-md w-full mx-4 p-6 border border-pink-500/20"
+            className="bg-[#1A1A1F] rounded-2xl max-w-md w-full mx-4 p-6 border border-pink-500/20"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold">Settings</h2>
               <button
                 onClick={() => setShowSettings(false)}
-                className="w-8 h-8 rounded-full bg-[#2a2a3e] flex items-center justify-center"
+                className="w-8 h-8 rounded-full bg-[#252530] flex items-center justify-center hover:bg-[#303040]"
               >
                 ✕
               </button>
@@ -196,13 +235,16 @@ function App() {
 
             <div className="space-y-4">
               {/* Network Info */}
-              <div className="bg-[#2a2a3e] rounded-lg p-4">
+              <div className="bg-[#252530] rounded-lg p-4">
                 <div className="text-sm text-gray-400 mb-1">Network</div>
-                <div className="font-medium">Mavryk Atlas Testnet</div>
+                <div className="font-medium flex items-center gap-2">
+                  <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                  Mavryk Mainnet
+                </div>
               </div>
 
               {/* Wallet Status */}
-              <div className="bg-[#2a2a3e] rounded-lg p-4">
+              <div className="bg-[#252530] rounded-lg p-4">
                 <div className="text-sm text-gray-400 mb-1">Wallet</div>
                 {isConnected && walletAddress ? (
                   <div className="font-medium text-green-400">
@@ -221,10 +263,46 @@ function App() {
                 )}
               </div>
 
+              {/* Sound Toggle */}
+              <div className="bg-[#252530] rounded-lg p-4 flex items-center justify-between">
+                <div>
+                  <div className="font-medium">Sound Effects</div>
+                  <div className="text-sm text-gray-400">Play sounds on trades</div>
+                </div>
+                <button
+                  onClick={() => useStore.getState().toggleSound()}
+                  className={`w-12 h-6 rounded-full transition-colors ${
+                    useStore.getState().soundEnabled ? 'bg-pink-500' : 'bg-gray-600'
+                  }`}
+                >
+                  <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
+                    useStore.getState().soundEnabled ? 'translate-x-6' : 'translate-x-0.5'
+                  }`} />
+                </button>
+              </div>
+
+              {/* Animations Toggle */}
+              <div className="bg-[#252530] rounded-lg p-4 flex items-center justify-between">
+                <div>
+                  <div className="font-medium">Animations</div>
+                  <div className="text-sm text-gray-400">Enable UI animations</div>
+                </div>
+                <button
+                  onClick={() => useStore.getState().toggleAnimations()}
+                  className={`w-12 h-6 rounded-full transition-colors ${
+                    useStore.getState().animationsEnabled ? 'bg-pink-500' : 'bg-gray-600'
+                  }`}
+                >
+                  <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
+                    useStore.getState().animationsEnabled ? 'translate-x-6' : 'translate-x-0.5'
+                  }`} />
+                </button>
+              </div>
+
               {/* Version */}
-              <div className="bg-[#2a2a3e] rounded-lg p-4">
+              <div className="bg-[#252530] rounded-lg p-4">
                 <div className="text-sm text-gray-400 mb-1">Version</div>
-                <div className="font-medium">1.0.0-beta</div>
+                <div className="font-medium">1.0.0</div>
               </div>
             </div>
 
@@ -243,7 +321,7 @@ function App() {
         position="top-center"
         toastOptions={{
           style: {
-            background: '#1a1a2e',
+            background: '#1A1A1F',
             color: '#fff',
             borderRadius: '12px',
             border: '1px solid rgba(236, 72, 153, 0.2)',

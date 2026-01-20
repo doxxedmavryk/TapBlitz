@@ -1,66 +1,87 @@
 /**
  * Interactive Trading Chart with One-Tap Trading
  * Uses Lightweight Charts library
+ * PRD Reference: Section 4.3.1, FR-PC-002
  */
 
-import React, { useEffect, useRef, useState } from 'react';
-import { createChart, IChartApi, ISeriesApi, CandlestickData } from 'lightweight-charts';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { createChart, IChartApi, ISeriesApi, CandlestickData, LineStyle } from 'lightweight-charts';
 import { useStore } from '@/store/useStore';
 import { RiskProfile, PositionSide } from '@/types';
 import { contractsService } from '@/services/contracts';
+import { dexService, PriceData } from '@/services/dex';
+import { TradeConfirmationModal } from './TradeConfirmationModal';
+import { PriceDisplay } from './PriceDisplay';
+import { TimeframeSelector, Timeframe } from './TimeframeSelector';
 import confetti from 'canvas-confetti';
 import toast from 'react-hot-toast';
 
 interface TradingChartProps {
-  marketId: number;
-  symbol: string;
+  marketId?: number;
+  symbol?: string;
 }
 
-export const TradingChart: React.FC<TradingChartProps> = ({ marketId, symbol }) => {
+export const TradingChart: React.FC<TradingChartProps> = ({
+  marketId = 0,
+  symbol = 'MVRK/USDT'
+}) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const priceLineRef = useRef<any>(null);
 
-  const { walletAddress, selectedMarket, addPosition, soundEnabled, animationsEnabled } = useStore();
-  const [riskProfile, setRiskProfile] = useState<RiskProfile>(RiskProfile.CASUAL);
-  const [collateral, setCollateral] = useState(5); // Default 5 tez
+  const { walletAddress, addPosition, soundEnabled, animationsEnabled } = useStore();
+
+  const [timeframe, setTimeframe] = useState<Timeframe>('15m');
+  const [priceData, setPriceData] = useState<PriceData | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
+  // Trade confirmation modal state
+  const [showTradeModal, setShowTradeModal] = useState(false);
+  const [pendingTrade, setPendingTrade] = useState<{
+    side: PositionSide;
+    targetPrice: number;
+  } | null>(null);
+
+  // Initialize chart
   useEffect(() => {
     if (!chartContainerRef.current) return;
 
-    // Create chart
+    // Create chart with PRD dark theme
     const chart = createChart(chartContainerRef.current, {
       width: chartContainerRef.current.clientWidth,
-      height: 600,
+      height: 400,
       layout: {
-        background: { color: '#0f172a' },
-        textColor: '#94a3b8',
+        background: { color: '#0D0D0F' },
+        textColor: '#A1A1AA',
       },
       grid: {
-        vertLines: { color: '#1e293b' },
-        horzLines: { color: '#1e293b' },
+        vertLines: { color: '#1A1A1F', style: LineStyle.Dotted },
+        horzLines: { color: '#1A1A1F', style: LineStyle.Dotted },
       },
       crosshair: {
         mode: 1,
         vertLine: {
-          color: '#475569',
+          color: '#EC4899',
           width: 1,
-          style: 2,
+          style: LineStyle.Dashed,
+          labelBackgroundColor: '#EC4899',
         },
         horzLine: {
-          color: '#475569',
+          color: '#EC4899',
           width: 1,
-          style: 2,
+          style: LineStyle.Dashed,
+          labelBackgroundColor: '#EC4899',
         },
       },
       timeScale: {
-        borderColor: '#1e293b',
+        borderColor: '#252530',
         timeVisible: true,
         secondsVisible: false,
       },
       rightPriceScale: {
-        borderColor: '#1e293b',
+        borderColor: '#252530',
       },
     });
 
@@ -68,22 +89,19 @@ export const TradingChart: React.FC<TradingChartProps> = ({ marketId, symbol }) 
 
     // Add candlestick series
     const candleSeries = chart.addCandlestickSeries({
-      upColor: '#10b981',
-      downColor: '#ef4444',
-      borderUpColor: '#10b981',
-      borderDownColor: '#ef4444',
-      wickUpColor: '#10b981',
-      wickDownColor: '#ef4444',
+      upColor: '#10B981',
+      downColor: '#EF4444',
+      borderUpColor: '#10B981',
+      borderDownColor: '#EF4444',
+      wickUpColor: '#10B981',
+      wickDownColor: '#EF4444',
     });
 
     candleSeriesRef.current = candleSeries;
 
-    // Load mock data (in production, fetch from API)
-    const mockData = generateMockData();
-    candleSeries.setData(mockData);
-
     // Handle chart click for one-tap trading
-    chartContainerRef.current.addEventListener('click', handleChartClick);
+    const handleClick = (event: MouseEvent) => handleChartClick(event);
+    chartContainerRef.current.addEventListener('click', handleClick);
 
     // Handle resize
     const handleResize = () => {
@@ -98,66 +116,145 @@ export const TradingChart: React.FC<TradingChartProps> = ({ marketId, symbol }) 
 
     return () => {
       window.removeEventListener('resize', handleResize);
-      if (chartContainerRef.current) {
-        chartContainerRef.current.removeEventListener('click', handleChartClick);
-      }
+      chartContainerRef.current?.removeEventListener('click', handleClick);
       chart.remove();
     };
   }, []);
 
-  const generateMockData = (): CandlestickData[] => {
-    const data: CandlestickData[] = [];
-    let basePrice = symbol === 'BTC/USD' ? 45000 : 3000;
-    const now = Date.now() / 1000;
+  // Subscribe to price updates
+  useEffect(() => {
+    setIsLoading(true);
 
-    for (let i = 0; i < 100; i++) {
-      const time = (now - (100 - i) * 15 * 60) as any; // 15-minute candles
-      const change = (Math.random() - 0.5) * basePrice * 0.02;
-      const open = basePrice;
-      const close = basePrice + change;
-      const high = Math.max(open, close) + Math.random() * basePrice * 0.01;
-      const low = Math.min(open, close) - Math.random() * basePrice * 0.01;
+    // Initial price fetch
+    dexService.getPriceData().then((data) => {
+      setPriceData(data);
+      setIsLoading(false);
+      updateChartData(data.price);
+    });
+
+    // Subscribe to updates
+    const unsubscribe = dexService.subscribe((data) => {
+      setPriceData(data);
+      updateChartData(data.price);
+    });
+
+    // Start real-time updates (every 5 seconds per PRD)
+    const stopUpdates = dexService.startPriceUpdates(5000);
+
+    return () => {
+      unsubscribe();
+      stopUpdates();
+    };
+  }, []);
+
+  // Update chart with new price data
+  const updateChartData = useCallback((currentPrice: number) => {
+    if (!candleSeriesRef.current || !chartRef.current) return;
+
+    // Generate candle data based on current price
+    const data = generateCandleData(currentPrice, timeframe);
+    candleSeriesRef.current.setData(data);
+
+    // Update price line
+    if (priceLineRef.current) {
+      candleSeriesRef.current.removePriceLine(priceLineRef.current);
+    }
+
+    priceLineRef.current = candleSeriesRef.current.createPriceLine({
+      price: currentPrice,
+      color: '#EC4899',
+      lineWidth: 2,
+      lineStyle: LineStyle.Solid,
+      axisLabelVisible: true,
+      title: 'Current',
+    });
+  }, [timeframe]);
+
+  // Generate candle data for chart
+  const generateCandleData = (currentPrice: number, tf: Timeframe): CandlestickData[] => {
+    const data: CandlestickData[] = [];
+    const now = Math.floor(Date.now() / 1000);
+
+    // Timeframe in seconds
+    const tfSeconds: Record<Timeframe, number> = {
+      '1m': 60,
+      '5m': 300,
+      '15m': 900,
+      '1h': 3600,
+      '4h': 14400,
+      '1d': 86400,
+    };
+
+    const interval = tfSeconds[tf];
+    const candleCount = 100;
+    let price = currentPrice * 0.95; // Start lower for realistic chart
+
+    for (let i = 0; i < candleCount; i++) {
+      const time = (now - (candleCount - i) * interval) as any;
+      const volatility = currentPrice * 0.005; // 0.5% volatility
+      const trend = (currentPrice - price) / (candleCount - i) * 0.5; // Drift towards current
+
+      const change = (Math.random() - 0.48) * volatility + trend;
+      const open = price;
+      const close = price + change;
+      const high = Math.max(open, close) + Math.random() * volatility * 0.5;
+      const low = Math.min(open, close) - Math.random() * volatility * 0.5;
 
       data.push({ time, open, high, low, close });
-      basePrice = close;
+      price = close;
+    }
+
+    // Ensure last candle ends at current price
+    if (data.length > 0) {
+      const last = data[data.length - 1];
+      last.close = currentPrice;
+      last.high = Math.max(last.high, currentPrice);
+      last.low = Math.min(last.low, currentPrice);
     }
 
     return data;
   };
 
-  const handleChartClick = async (event: MouseEvent) => {
-    if (!chartRef.current || !walletAddress || isProcessing) return;
+  // Handle timeframe change
+  const handleTimeframeChange = (tf: Timeframe) => {
+    setTimeframe(tf);
+    if (priceData) {
+      updateChartData(priceData.price);
+    }
+  };
+
+  // Handle chart click for tap-to-trade
+  const handleChartClick = (event: MouseEvent) => {
+    if (!chartRef.current || !priceData || isProcessing) return;
 
     const rect = chartContainerRef.current!.getBoundingClientRect();
     const y = event.clientY - rect.top;
 
     // Get price at clicked Y coordinate
-    const price = chartRef.current.priceScale('right').coordinateToPrice(y);
-    if (!price || !selectedMarket) return;
+    const clickedPrice = chartRef.current.priceScale('right').coordinateToPrice(y);
+    if (!clickedPrice) return;
 
     // Determine if it's a LONG or SHORT based on current price
-    const currentPrice = selectedMarket.markPrice;
-    const side = price > currentPrice ? PositionSide.LONG : PositionSide.SHORT;
+    const currentPrice = priceData.price;
+    const side = clickedPrice > currentPrice ? PositionSide.LONG : PositionSide.SHORT;
 
-    // Show confirmation toast with animation
+    // Show ripple effect
     if (animationsEnabled) {
-      const rect = chartContainerRef.current!.getBoundingClientRect();
-      const x = (event.clientX - rect.left) / rect.width;
-      const y = (event.clientY - rect.top) / rect.height;
-
-      // Create ripple effect
       createRipple(event.clientX - rect.left, event.clientY - rect.top);
     }
 
-    // Play sound effect
+    // Play click sound
     if (soundEnabled) {
       playSound('click');
     }
 
-    await executeTradeHandler(side, price);
+    // Open trade confirmation modal
+    setPendingTrade({ side, targetPrice: Number(clickedPrice) });
+    setShowTradeModal(true);
   };
 
-  const executeTradeHandler = async (side: PositionSide, targetPrice: number) => {
+  // Execute trade after confirmation
+  const handleTradeConfirm = async (params: any) => {
     if (!walletAddress) {
       toast.error('Please connect your wallet first');
       return;
@@ -168,10 +265,10 @@ export const TradingChart: React.FC<TradingChartProps> = ({ marketId, symbol }) 
     try {
       const tradeParams = {
         marketId,
-        side,
-        riskProfile,
-        targetPrice,
-        collateral,
+        side: params.side,
+        riskProfile: params.riskProfile,
+        targetPrice: params.targetPrice,
+        collateral: params.collateral,
       };
 
       toast.loading('Opening position...', { id: 'trade-toast' });
@@ -179,7 +276,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({ marketId, symbol }) 
       const opHash = await contractsService.openPosition(tradeParams);
 
       toast.success(
-        `Position opened! ${side.toUpperCase()} @ ${targetPrice.toFixed(2)}`,
+        `Position opened! ${params.side.toUpperCase()} @ $${params.targetPrice.toFixed(4)}`,
         { id: 'trade-toast', duration: 5000 }
       );
 
@@ -189,6 +286,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({ marketId, symbol }) 
           particleCount: 100,
           spread: 70,
           origin: { y: 0.6 },
+          colors: ['#EC4899', '#8B5CF6', '#10B981'],
         });
       }
 
@@ -196,6 +294,9 @@ export const TradingChart: React.FC<TradingChartProps> = ({ marketId, symbol }) 
       if (soundEnabled) {
         playSound('success');
       }
+
+      setShowTradeModal(false);
+      setPendingTrade(null);
 
       // Refresh positions
       setTimeout(async () => {
@@ -220,75 +321,72 @@ export const TradingChart: React.FC<TradingChartProps> = ({ marketId, symbol }) 
     ripple.style.left = `${x}px`;
     ripple.style.top = `${y}px`;
     chartContainerRef.current?.appendChild(ripple);
-
     setTimeout(() => ripple.remove(), 600);
   };
 
   const playSound = (type: 'click' | 'success' | 'error') => {
-    // In production, load and play actual sound files
     const audio = new Audio(`/sounds/${type}.mp3`);
     audio.volume = 0.3;
     audio.play().catch(() => {});
   };
 
   return (
-    <div className="relative">
-      {/* Risk Profile Selector */}
-      <div className="absolute top-4 left-4 z-10 bg-slate-800/80 backdrop-blur-sm rounded-lg p-4 space-y-3">
-        <div className="text-sm font-semibold text-slate-300">Trading Mode</div>
-        <div className="flex flex-col gap-2">
-          {[
-            { mode: RiskProfile.CASUAL, label: 'Casual', leverage: '5x', color: 'bg-green-500' },
-            { mode: RiskProfile.DEGENERATE, label: 'Degen', leverage: '20x', color: 'bg-orange-500' },
-            { mode: RiskProfile.WHALE, label: 'Whale', leverage: '10x', color: 'bg-purple-500' },
-          ].map(({ mode, label, leverage, color }) => (
-            <button
-              key={mode}
-              onClick={() => setRiskProfile(mode)}
-              className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                riskProfile === mode
-                  ? `${color} text-white shadow-lg scale-105`
-                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-              }`}
-            >
-              {label} <span className="text-xs opacity-75">{leverage}</span>
-            </button>
-          ))}
-        </div>
+    <div className="space-y-4">
+      {/* Price Display */}
+      <PriceDisplay
+        symbol={symbol}
+        price={priceData?.price || 0}
+        change24h={priceData?.change24h || 0}
+        high24h={priceData?.high24h || 0}
+        low24h={priceData?.low24h || 0}
+        volume24h={priceData?.volume24h}
+        isLoading={isLoading}
+      />
 
-        {/* Collateral Input */}
-        <div className="pt-3 border-t border-slate-700">
-          <label className="text-sm text-slate-400 block mb-2">Collateral (tez)</label>
-          <input
-            type="number"
-            min="1"
-            max="1000"
-            step="1"
-            value={collateral}
-            onChange={(e) => setCollateral(Number(e.target.value))}
-            className="w-full bg-slate-700 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
-          />
-        </div>
-      </div>
+      {/* Timeframe Selector */}
+      <div className="flex items-center justify-between">
+        <TimeframeSelector
+          selected={timeframe}
+          onChange={handleTimeframeChange}
+        />
 
-      {/* Click to Trade Hint */}
-      <div className="absolute top-4 right-4 z-10 bg-primary-500/10 backdrop-blur-sm border border-primary-500/30 rounded-lg px-4 py-2">
-        <div className="text-primary-400 text-sm font-medium">
-          👆 Click anywhere to trade
+        {/* Tap to Trade Hint */}
+        <div className="bg-pink-500/10 border border-pink-500/30 rounded-lg px-3 py-1.5">
+          <span className="text-pink-400 text-sm font-medium">
+            👆 Tap chart to trade
+          </span>
         </div>
       </div>
 
       {/* Chart Container */}
-      <div ref={chartContainerRef} className="rounded-lg overflow-hidden" />
+      <div className="relative">
+        <div
+          ref={chartContainerRef}
+          className="rounded-xl overflow-hidden bg-[#0D0D0F]"
+        />
 
-      {/* Processing Overlay */}
-      {isProcessing && (
-        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center rounded-lg">
-          <div className="bg-slate-800 rounded-lg p-6 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mx-auto mb-4"></div>
-            <div className="text-white font-medium">Processing trade...</div>
+        {/* Loading Overlay */}
+        {isLoading && (
+          <div className="absolute inset-0 bg-[#0D0D0F]/80 flex items-center justify-center rounded-xl">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-pink-500" />
           </div>
-        </div>
+        )}
+      </div>
+
+      {/* Trade Confirmation Modal */}
+      {pendingTrade && (
+        <TradeConfirmationModal
+          isOpen={showTradeModal}
+          onClose={() => {
+            setShowTradeModal(false);
+            setPendingTrade(null);
+          }}
+          onConfirm={handleTradeConfirm}
+          side={pendingTrade.side}
+          targetPrice={pendingTrade.targetPrice}
+          currentPrice={priceData?.price || 0}
+          isProcessing={isProcessing}
+        />
       )}
 
       <style>{`
@@ -297,7 +395,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({ marketId, symbol }) 
           width: 20px;
           height: 20px;
           border-radius: 50%;
-          background: rgba(14, 165, 233, 0.6);
+          background: rgba(236, 72, 153, 0.6);
           transform: translate(-50%, -50%);
           animation: ripple 0.6s ease-out;
           pointer-events: none;
