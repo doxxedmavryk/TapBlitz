@@ -9,9 +9,9 @@
  * - USDT_BIG_MAP_ID: 54
  */
 
-// Contract addresses
+// Contract addresses - Mavryk Mainnet
 export const MAVRYK_CONTRACTS = {
-  RPC_URL: 'https://atlasnet.rpc.mavryk.network',
+  RPC_URL: 'https://rpc.mavryk.network',
   ROUTER: 'KT1RRPjU5q12uPf5E2xGJodU8VA99skWKcmJ',
   USDT: 'KT1D7ZQBhwxkMgZThqctYtMXigFvJRZL4eSy',
   POOL: 'KT1Mp34odc6bZLbZzY1BXb5m4KSHZcZswHcY',

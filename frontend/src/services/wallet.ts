@@ -41,7 +41,8 @@ const log = (level: keyof typeof LOG_LEVELS, message: string, data?: any) => {
 class WalletService {
   private wallet: BeaconWallet | null = null;
   private tezos: TezosToolkit | null = null;
-  private rpcUrl: string = 'https://atlasnet.rpc.mavryk.network';
+  private rpcUrl: string = 'https://rpc.mavryk.network';
+  private networkName: string = 'mainnet';
   private initialized: boolean = false;
   private initializing: boolean = false;
   private initPromise: Promise<void> | null = null;
@@ -128,11 +129,11 @@ class WalletService {
 
     try {
       const NetworkType = (this as any).NetworkType;
-      log('DEBUG', 'Requesting permissions...', { network: 'atlasnet', rpcUrl: this.rpcUrl });
+      log('DEBUG', 'Requesting permissions...', { network: this.networkName, rpcUrl: this.rpcUrl });
       await this.wallet.requestPermissions({
         network: {
-          type: NetworkType.CUSTOM,
-          name: 'atlasnet',
+          type: NetworkType.MAINNET,
+          name: this.networkName,
           rpcUrl: this.rpcUrl,
         },
       });
