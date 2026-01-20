@@ -1,11 +1,13 @@
 /**
  * Mavryk Wallet Service using Beacon SDK
  * Uses dynamic imports to ensure polyfills are loaded first
+ * Supports dynamic network switching between Atlasnet testnet and Mainnet
  */
 
 // Types only - these don't execute code
 import type { BeaconWallet } from '@taquito/beacon-wallet';
 import type { TezosToolkit } from '@taquito/taquito';
+import { NETWORKS, DEFAULT_NETWORK, type NetworkId, type NetworkConfig } from '@/config/networks';
 
 // =============================================================================
 // LOGGING
@@ -41,23 +43,62 @@ const log = (level: keyof typeof LOG_LEVELS, message: string, data?: any) => {
 class WalletService {
   private wallet: BeaconWallet | null = null;
   private tezos: TezosToolkit | null = null;
-  private rpcUrl: string = 'https://rpc.mavryk.network';
-  private networkName: string = 'mainnet';
+  private currentNetwork: NetworkConfig = NETWORKS[DEFAULT_NETWORK];
+  private rpcUrl: string = NETWORKS[DEFAULT_NETWORK].rpcUrl;
+  private networkName: string = NETWORKS[DEFAULT_NETWORK].name;
   private initialized: boolean = false;
-  private initializing: boolean = false;
   private initPromise: Promise<void> | null = null;
   private initError: Error | null = null;
 
   constructor() {
-    log('INFO', 'WalletService constructor called (lazy initialization)');
+    log('INFO', 'WalletService constructor called (lazy initialization)', {
+      network: this.currentNetwork.displayName,
+      rpcUrl: this.rpcUrl
+    });
     // Don't initialize here - wait until first use
+  }
+
+  /**
+   * Switch to a different network
+   */
+  setNetwork(networkId: NetworkId): void {
+    const network = NETWORKS[networkId];
+    if (!network) {
+      log('ERROR', 'Unknown network', { networkId });
+      return;
+    }
+
+    this.currentNetwork = network;
+    this.rpcUrl = network.rpcUrl;
+    this.networkName = network.name;
+
+    log('INFO', 'Network switched', {
+      network: network.displayName,
+      rpcUrl: network.rpcUrl,
+      isTestnet: network.isTestnet
+    });
+
+    // Update Tezos provider if already initialized
+    if (this.tezos) {
+      this.tezos.setRpcProvider(this.rpcUrl);
+    }
+  }
+
+  /**
+   * Get current network info
+   */
+  getNetworkInfo(): { id: NetworkId; name: string; isTestnet: boolean } {
+    return {
+      id: this.currentNetwork.id,
+      name: this.currentNetwork.displayName,
+      isTestnet: this.currentNetwork.isTestnet,
+    };
   }
 
   private async initialize(): Promise<void> {
     if (this.initialized) return;
     if (this.initPromise) return this.initPromise;
 
-    this.initializing = true;
     log('INFO', 'Initializing wallet service (lazy)...', { rpcUrl: this.rpcUrl });
 
     this.initPromise = (async () => {
@@ -93,8 +134,6 @@ class WalletService {
         this.initError = error;
         log('ERROR', 'Failed to initialize wallet service', { error: error.message, stack: error.stack });
         throw error;
-      } finally {
-        this.initializing = false;
       }
     })();
 
@@ -129,14 +168,15 @@ class WalletService {
 
     try {
       const NetworkType = (this as any).NetworkType;
-      log('DEBUG', 'Requesting permissions...', { network: this.networkName, rpcUrl: this.rpcUrl });
+      const networkType = this.currentNetwork.isTestnet ? NetworkType.CUSTOM : NetworkType.MAINNET;
+      log('DEBUG', 'Requesting permissions...', { network: this.networkName, rpcUrl: this.rpcUrl, type: networkType });
       await this.wallet.requestPermissions({
         network: {
-          type: NetworkType.MAINNET,
+          type: networkType,
           name: this.networkName,
           rpcUrl: this.rpcUrl,
         },
-      });
+      } as any); // Type assertion for Beacon SDK compatibility
       log('DEBUG', 'Permissions granted');
 
       const activeAccount = await this.wallet.client.getActiveAccount();

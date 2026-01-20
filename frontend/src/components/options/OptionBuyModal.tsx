@@ -31,7 +31,7 @@ export const OptionBuyModal: React.FC<OptionBuyModalProps> = ({
   expiryDate,
   seriesId,
 }) => {
-  const { walletAddress, config, addOption, soundEnabled, animationsEnabled } = useStore();
+  const { walletAddress, addOption, animationsEnabled } = useStore();
   const [premium, setPremium] = useState(10);
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -61,7 +61,7 @@ export const OptionBuyModal: React.FC<OptionBuyModalProps> = ({
         premium,
       };
 
-      const opHash = await contractsService.buyOption(optionParams);
+      await contractsService.buyOption(optionParams);
 
       toast.success(
         `Option purchased! ${isCall ? 'CALL' : 'PUT'} for ${premium} MVRK`,

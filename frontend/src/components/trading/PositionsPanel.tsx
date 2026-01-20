@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useStore } from '@/store/useStore';
 import { contractsService } from '@/services/contracts';
 import { dexService, PriceData } from '@/services/dex';
-import { Position, MAINTENANCE_MARGIN_PERCENT } from '@/types';
+import { Position } from '@/types';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
 
@@ -22,7 +22,7 @@ interface PositionWithMetrics extends Position {
 }
 
 export const PositionsPanel: React.FC = () => {
-  const { positions, walletAddress, removePosition, soundEnabled } = useStore();
+  const { positions, removePosition, soundEnabled } = useStore();
   const [priceData, setPriceData] = useState<PriceData | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
@@ -76,7 +76,7 @@ export const PositionsPanel: React.FC = () => {
     try {
       toast.loading('Closing position...', { id: 'close-position' });
 
-      const opHash = await contractsService.closePosition(positionId);
+      await contractsService.closePosition(positionId);
 
       toast.success('Position closed successfully!', {
         id: 'close-position',

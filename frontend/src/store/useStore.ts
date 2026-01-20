@@ -14,6 +14,7 @@ import type {
   DailyReward,
   AppConfig,
 } from '@/types';
+import { NETWORKS, DEFAULT_NETWORK, type NetworkId, type NetworkConfig } from '@/config/networks';
 
 // =============================================================================
 // LOGGING
@@ -47,11 +48,36 @@ try {
   localStorage.removeItem('tapblitz-storage');
 }
 
+// Build initial config from default network
+const buildConfigFromNetwork = (network: NetworkConfig): AppConfig => ({
+  networkType: network.id,
+  rpcUrl: network.rpcUrl,
+  contracts: {
+    perpetuals: network.contracts.perpetuals,
+    options: network.contracts.options,
+    euphToken: network.contracts.euphToken,
+    oracle: network.contracts.oracle,
+    router: network.contracts.router,
+    usdt: network.contracts.usdt,
+    pool: network.contracts.pool,
+    nativeMvrk: network.contracts.nativeMvrk,
+  },
+  maxSlippage: 0.01,
+  minCollateral: 1,
+  maxCollateral: 10000,
+  enableSounds: true,
+  enableAnimations: true,
+  chartInterval: '15m',
+});
+
 interface AppState {
   // User state
   user: User | null;
   isConnected: boolean;
   walletAddress: string | null;
+
+  // Network state
+  currentNetwork: NetworkId;
 
   // Trading state
   positions: Position[];
@@ -80,6 +106,7 @@ interface AppState {
   setUser: (user: User | null) => void;
   connectWallet: (address: string) => void;
   disconnectWallet: () => void;
+  switchNetwork: (networkId: NetworkId) => void;
   addPosition: (position: Position) => void;
   updatePosition: (id: number, updates: Partial<Position>) => void;
   removePosition: (id: number) => void;
@@ -104,6 +131,8 @@ interface AppState {
 
 log('INFO', 'Creating Zustand store...');
 
+const defaultNetwork = NETWORKS[DEFAULT_NETWORK];
+
 export const useStore = create<AppState>()(
   devtools(
     persist(
@@ -114,6 +143,7 @@ export const useStore = create<AppState>()(
         user: null,
         isConnected: false,
         walletAddress: null,
+        currentNetwork: DEFAULT_NETWORK,
         positions: [],
         options: [],
         markets: [],
@@ -128,29 +158,8 @@ export const useStore = create<AppState>()(
         showAchievements: false,
         soundEnabled: true,
         animationsEnabled: true,
-        config: {
-          // Mavryk Mainnet configuration
-          networkType: 'mainnet',
-          rpcUrl: 'https://rpc.mavryk.network',
-          contracts: {
-            // Trading contracts (to be deployed)
-            perpetuals: 'KT1_PERPETUALS_MAINNET',
-            options: 'KT1_OPTIONS_MAINNET',
-            euphToken: 'KT1_EUPH_MAINNET',
-            oracle: 'KT1_ORACLE_MAINNET',
-            // Mavryk DEX contracts (mainnet)
-            router: 'KT1RRPjU5q12uPf5E2xGJodU8VA99skWKcmJ',
-            usdt: 'KT1D7ZQBhwxkMgZThqctYtMXigFvJRZL4eSy',
-            pool: 'KT1Mp34odc6bZLbZzY1BXb5m4KSHZcZswHcY',
-            nativeMvrk: 'mv2ZZZZZZZZZZZZZZZZZZZZZZZZZZZDXMF2d',
-          },
-          maxSlippage: 0.01,
-          minCollateral: 1,
-          maxCollateral: 10000,
-          enableSounds: true,
-          enableAnimations: true,
-          chartInterval: '15m',
-        },
+        // Default to Atlasnet testnet (DEX is live there)
+        config: buildConfigFromNetwork(defaultNetwork),
 
         // User actions
         setUser: (user) => set({ user }),
@@ -169,6 +178,43 @@ export const useStore = create<AppState>()(
             positions: [],
             options: [],
           }),
+
+        // Network switching
+        switchNetwork: (networkId: NetworkId) => {
+          const network = NETWORKS[networkId];
+          if (!network) {
+            log('ERROR', 'Unknown network', { networkId });
+            return;
+          }
+
+          log('INFO', 'Switching network', { from: get().currentNetwork, to: networkId });
+
+          // Disconnect wallet when switching networks
+          set((state) => ({
+            currentNetwork: networkId,
+            config: {
+              ...state.config,
+              networkType: network.id,
+              rpcUrl: network.rpcUrl,
+              contracts: {
+                perpetuals: network.contracts.perpetuals,
+                options: network.contracts.options,
+                euphToken: network.contracts.euphToken,
+                oracle: network.contracts.oracle,
+                router: network.contracts.router,
+                usdt: network.contracts.usdt,
+                pool: network.contracts.pool,
+                nativeMvrk: network.contracts.nativeMvrk,
+              },
+            },
+            // Clear wallet connection on network switch
+            isConnected: false,
+            walletAddress: null,
+            user: null,
+            positions: [],
+            options: [],
+          }));
+        },
 
         // Position actions
         addPosition: (position) =>
@@ -286,6 +332,7 @@ export const useStore = create<AppState>()(
         partialize: (state) => ({
           soundEnabled: state.soundEnabled,
           animationsEnabled: state.animationsEnabled,
+          currentNetwork: state.currentNetwork,
           config: state.config,
         }),
       }

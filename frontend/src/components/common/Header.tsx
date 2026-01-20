@@ -6,6 +6,7 @@
 import React, { useEffect, useState } from 'react';
 import { useStore } from '@/store/useStore';
 import { walletService } from '@/services/wallet';
+import { NETWORKS } from '@/config/networks';
 import toast from 'react-hot-toast';
 
 interface HeaderProps {
@@ -22,10 +23,12 @@ export const Header: React.FC<HeaderProps> = ({
   const {
     isConnected,
     walletAddress,
-    user,
+    currentNetwork,
     toggleWalletModal,
     disconnectWallet,
   } = useStore();
+
+  const networkConfig = NETWORKS[currentNetwork];
 
   const [balance, setBalance] = useState<number>(0);
 
@@ -58,12 +61,17 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="sticky top-0 z-40 bg-[#0D0D0F]/95 backdrop-blur-md border-b border-gray-800">
       <div className="h-14 px-4 flex items-center justify-between">
-        {/* Logo */}
+        {/* Logo + Network Badge */}
         <div className="flex items-center gap-2">
           <span className="text-2xl">⚡</span>
           <div>
             <h1 className="text-lg font-bold text-white leading-none">TapBlitz</h1>
-            <p className="text-xs text-gray-500 leading-none">Mavryk</p>
+            <div className="flex items-center gap-1">
+              <span className={`w-1.5 h-1.5 rounded-full ${networkConfig.isTestnet ? 'bg-yellow-500' : 'bg-green-500'}`}></span>
+              <p className={`text-xs leading-none ${networkConfig.isTestnet ? 'text-yellow-500' : 'text-gray-500'}`}>
+                {networkConfig.isTestnet ? 'Testnet' : 'Mainnet'}
+              </p>
+            </div>
           </div>
         </div>
 
