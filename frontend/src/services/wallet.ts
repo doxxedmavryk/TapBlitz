@@ -1,11 +1,13 @@
 /**
- * Mavryk Wallet Service using Beacon SDK
+ * Mavryk Wallet Service using Mavryk Beacon SDK
  * Uses dynamic imports to ensure polyfills are loaded first
+ * Supports dynamic network switching between Atlasnet testnet and Mainnet
  */
 
 // Types only - these don't execute code
-import type { BeaconWallet } from '@taquito/beacon-wallet';
-import type { TezosToolkit } from '@taquito/taquito';
+import type { BeaconWallet } from '@mavrykdynamics/taquito-beacon-wallet';
+import type { MavrykToolkit } from '@mavrykdynamics/taquito';
+import { NETWORKS, DEFAULT_NETWORK, type NetworkId, type NetworkConfig } from '@/config/networks';
 
 // =============================================================================
 // LOGGING
@@ -40,36 +42,75 @@ const log = (level: keyof typeof LOG_LEVELS, message: string, data?: any) => {
 
 class WalletService {
   private wallet: BeaconWallet | null = null;
-  private tezos: TezosToolkit | null = null;
-  private rpcUrl: string = 'https://rpc.mavryk.network';
-  private networkName: string = 'mainnet';
+  private mavryk: MavrykToolkit | null = null;
+  private currentNetwork: NetworkConfig = NETWORKS[DEFAULT_NETWORK];
+  private rpcUrl: string = NETWORKS[DEFAULT_NETWORK].rpcUrl;
+  private networkName: string = NETWORKS[DEFAULT_NETWORK].name;
   private initialized: boolean = false;
-  private initializing: boolean = false;
   private initPromise: Promise<void> | null = null;
   private initError: Error | null = null;
 
   constructor() {
-    log('INFO', 'WalletService constructor called (lazy initialization)');
+    log('INFO', 'WalletService constructor called (lazy initialization)', {
+      network: this.currentNetwork.displayName,
+      rpcUrl: this.rpcUrl
+    });
     // Don't initialize here - wait until first use
+  }
+
+  /**
+   * Switch to a different network
+   */
+  setNetwork(networkId: NetworkId): void {
+    const network = NETWORKS[networkId];
+    if (!network) {
+      log('ERROR', 'Unknown network', { networkId });
+      return;
+    }
+
+    this.currentNetwork = network;
+    this.rpcUrl = network.rpcUrl;
+    this.networkName = network.name;
+
+    log('INFO', 'Network switched', {
+      network: network.displayName,
+      rpcUrl: network.rpcUrl,
+      isTestnet: network.isTestnet
+    });
+
+    // Update Mavryk provider if already initialized
+    if (this.mavryk) {
+      this.mavryk.setRpcProvider(this.rpcUrl);
+    }
+  }
+
+  /**
+   * Get current network info
+   */
+  getNetworkInfo(): { id: NetworkId; name: string; isTestnet: boolean } {
+    return {
+      id: this.currentNetwork.id,
+      name: this.currentNetwork.displayName,
+      isTestnet: this.currentNetwork.isTestnet,
+    };
   }
 
   private async initialize(): Promise<void> {
     if (this.initialized) return;
     if (this.initPromise) return this.initPromise;
 
-    this.initializing = true;
     log('INFO', 'Initializing wallet service (lazy)...', { rpcUrl: this.rpcUrl });
 
     this.initPromise = (async () => {
       try {
         // Dynamic imports - these load AFTER polyfills are ready
-        log('DEBUG', 'Dynamically importing Beacon SDK...');
-        const [{ BeaconWallet }, { TezosToolkit }, { NetworkType }] = await Promise.all([
-          import('@taquito/beacon-wallet'),
-          import('@taquito/taquito'),
-          import('@airgap/beacon-sdk'),
+        log('DEBUG', 'Dynamically importing Mavryk Beacon SDK...');
+        const [{ BeaconWallet }, { MavrykToolkit }, { NetworkType }] = await Promise.all([
+          import('@mavrykdynamics/taquito-beacon-wallet'),
+          import('@mavrykdynamics/taquito'),
+          import('@mavrykdynamics/beacon-sdk'),
         ]);
-        log('DEBUG', 'Beacon SDK imported successfully');
+        log('DEBUG', 'Mavryk Beacon SDK imported successfully');
 
         // Store NetworkType for later use
         (this as any).NetworkType = NetworkType;
@@ -82,10 +123,10 @@ class WalletService {
         });
         log('DEBUG', 'BeaconWallet created successfully');
 
-        log('DEBUG', 'Creating TezosToolkit instance...');
-        this.tezos = new TezosToolkit(this.rpcUrl);
-        this.tezos.setWalletProvider(this.wallet);
-        log('DEBUG', 'TezosToolkit configured');
+        log('DEBUG', 'Creating MavrykToolkit instance...');
+        this.mavryk = new MavrykToolkit(this.rpcUrl);
+        this.mavryk.setWalletProvider(this.wallet);
+        log('DEBUG', 'MavrykToolkit configured');
 
         this.initialized = true;
         log('INFO', 'Wallet service initialized successfully');
@@ -93,8 +134,6 @@ class WalletService {
         this.initError = error;
         log('ERROR', 'Failed to initialize wallet service', { error: error.message, stack: error.stack });
         throw error;
-      } finally {
-        this.initializing = false;
       }
     })();
 
@@ -129,14 +168,15 @@ class WalletService {
 
     try {
       const NetworkType = (this as any).NetworkType;
-      log('DEBUG', 'Requesting permissions...', { network: this.networkName, rpcUrl: this.rpcUrl });
+      const networkType = this.currentNetwork.isTestnet ? NetworkType.CUSTOM : NetworkType.MAINNET;
+      log('DEBUG', 'Requesting permissions...', { network: this.networkName, rpcUrl: this.rpcUrl, type: networkType });
       await this.wallet.requestPermissions({
         network: {
-          type: NetworkType.MAINNET,
+          type: networkType,
           name: this.networkName,
           rpcUrl: this.rpcUrl,
         },
-      });
+      } as any); // Type assertion for Beacon SDK compatibility
       log('DEBUG', 'Permissions granted');
 
       const activeAccount = await this.wallet.client.getActiveAccount();
@@ -201,16 +241,16 @@ class WalletService {
     log('DEBUG', 'Getting balance...', { address });
     await this.ensureInitialized();
 
-    if (!this.tezos) {
-      log('ERROR', 'Cannot get balance: Tezos not initialized');
-      throw new Error('Tezos not initialized');
+    if (!this.mavryk) {
+      log('ERROR', 'Cannot get balance: Mavryk not initialized');
+      throw new Error('Mavryk not initialized');
     }
 
     try {
-      const balance = await this.tezos.tz.getBalance(address);
-      const balanceInTez = balance.toNumber() / 1_000_000;
-      log('DEBUG', 'Balance retrieved', { address, balance: balanceInTez });
-      return balanceInTez;
+      const balance = await this.mavryk.rpc.getBalance(address);
+      const balanceInMvrk = balance.toNumber() / 1_000_000;
+      log('DEBUG', 'Balance retrieved', { address, balance: balanceInMvrk });
+      return balanceInMvrk;
     } catch (error: any) {
       log('ERROR', 'Error getting balance', { error: error.message });
       throw error;
@@ -226,14 +266,14 @@ class WalletService {
     log('INFO', 'Calling contract...', { contractAddress, entrypoint, amount });
     await this.ensureInitialized();
 
-    if (!this.tezos) {
-      log('ERROR', 'Cannot call contract: Tezos not initialized');
-      throw new Error('Tezos not initialized');
+    if (!this.mavryk) {
+      log('ERROR', 'Cannot call contract: Mavryk not initialized');
+      throw new Error('Mavryk not initialized');
     }
 
     try {
       log('DEBUG', 'Getting contract instance...');
-      const contract = await this.tezos.wallet.at(contractAddress);
+      const contract = await this.mavryk.wallet.at(contractAddress);
 
       log('DEBUG', 'Sending transaction...');
       const operation = await contract.methods[entrypoint](...params).send({
@@ -259,13 +299,13 @@ class WalletService {
     log('DEBUG', 'Reading contract...', { contractAddress, viewName });
     await this.ensureInitialized();
 
-    if (!this.tezos) {
-      log('ERROR', 'Cannot read contract: Tezos not initialized');
-      throw new Error('Tezos not initialized');
+    if (!this.mavryk) {
+      log('ERROR', 'Cannot read contract: Mavryk not initialized');
+      throw new Error('Mavryk not initialized');
     }
 
     try {
-      const contract = await this.tezos.contract.at(contractAddress);
+      const contract = await this.mavryk.contract.at(contractAddress);
       const storage: any = await contract.storage();
 
       let result;
@@ -286,17 +326,17 @@ class WalletService {
   setRpcUrl(url: string) {
     log('INFO', 'Setting RPC URL', { url });
     this.rpcUrl = url;
-    if (this.tezos) {
-      this.tezos.setRpcProvider(url);
+    if (this.mavryk) {
+      this.mavryk.setRpcProvider(url);
     }
   }
 
-  getTezos(): TezosToolkit {
-    if (!this.tezos) {
-      log('ERROR', 'getTezos called but Tezos not initialized');
-      throw new Error('Tezos not initialized');
+  getMavryk(): MavrykToolkit {
+    if (!this.mavryk) {
+      log('ERROR', 'getMavryk called but Mavryk not initialized');
+      throw new Error('Mavryk not initialized');
     }
-    return this.tezos;
+    return this.mavryk;
   }
 
   getWallet(): BeaconWallet {

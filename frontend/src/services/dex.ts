@@ -1,23 +1,12 @@
 /**
  * Mavryk DEX Service - MVRK/USDT price fetching
- *
- * Contract Addresses (Mavryk Atlas Testnet):
- * - ROUTER: KT1RRPjU5q12uPf5E2xGJodU8VA99skWKcmJ
- * - USDT: KT1D7ZQBhwxkMgZThqctYtMXigFvJRZL4eSy
- * - POOL: KT1Mp34odc6bZLbZzY1BXb5m4KSHZcZswHcY
- * - NATIVE (MVRK): mv2ZZZZZZZZZZZZZZZZZZZZZZZZZZZDXMF2d
- * - USDT_BIG_MAP_ID: 54
+ * Supports dynamic network switching between Atlasnet testnet and Mainnet
  */
 
-// Contract addresses - Mavryk Mainnet
-export const MAVRYK_CONTRACTS = {
-  RPC_URL: 'https://rpc.mavryk.network',
-  ROUTER: 'KT1RRPjU5q12uPf5E2xGJodU8VA99skWKcmJ',
-  USDT: 'KT1D7ZQBhwxkMgZThqctYtMXigFvJRZL4eSy',
-  POOL: 'KT1Mp34odc6bZLbZzY1BXb5m4KSHZcZswHcY',
-  NATIVE_MVRK: 'mv2ZZZZZZZZZZZZZZZZZZZZZZZZZZZDXMF2d',
-  USDT_BIG_MAP_ID: 54,
-} as const;
+import { NETWORKS, DEFAULT_NETWORK, type NetworkId, type NetworkConfig } from '@/config/networks';
+
+// Current network configuration
+let currentNetwork: NetworkConfig = NETWORKS[DEFAULT_NETWORK];
 
 // Price data types
 export interface PriceData {
@@ -54,12 +43,38 @@ class DexService {
   private currentPrice: number = 0.0156; // Initial MVRK/USDT price estimate
   private lastFetchTime: number = 0;
   private fetchInterval: number = 5000; // 5 seconds
-  private priceChangePercent: number = 0;
   private listeners: Set<(price: PriceData) => void> = new Set();
 
   constructor() {
-    log('INFO', 'DexService initialized', { contracts: MAVRYK_CONTRACTS });
+    log('INFO', 'DexService initialized', { network: currentNetwork.displayName });
     this.initializePriceHistory();
+  }
+
+  /**
+   * Switch to a different network
+   */
+  setNetwork(networkId: NetworkId): void {
+    const network = NETWORKS[networkId];
+    if (!network) {
+      log('ERROR', 'Unknown network', { networkId });
+      return;
+    }
+    currentNetwork = network;
+    log('INFO', 'Network switched', { network: network.displayName, rpcUrl: network.rpcUrl });
+    // Reset price history on network switch
+    this.priceHistory = [];
+    this.initializePriceHistory();
+  }
+
+  /**
+   * Get current network info
+   */
+  getNetworkInfo(): { id: NetworkId; name: string; isTestnet: boolean } {
+    return {
+      id: currentNetwork.id,
+      name: currentNetwork.displayName,
+      isTestnet: currentNetwork.isTestnet,
+    };
   }
 
   private initializePriceHistory() {
@@ -77,10 +92,16 @@ class DexService {
    */
   async getPoolReserves(): Promise<PoolReserves | null> {
     try {
-      log('DEBUG', 'Fetching pool reserves...', { pool: MAVRYK_CONTRACTS.POOL });
+      const poolAddress = currentNetwork.contracts.pool;
+      if (!poolAddress) {
+        log('WARN', 'Pool contract not configured for network', { network: currentNetwork.id });
+        return null;
+      }
+
+      log('DEBUG', 'Fetching pool reserves...', { pool: poolAddress, network: currentNetwork.id });
 
       const response = await fetch(
-        `${MAVRYK_CONTRACTS.RPC_URL}/chains/main/blocks/head/context/contracts/${MAVRYK_CONTRACTS.POOL}/storage`
+        `${currentNetwork.rpcUrl}/chains/main/blocks/head/context/contracts/${poolAddress}/storage`
       );
 
       if (!response.ok) {
@@ -159,9 +180,7 @@ class DexService {
   }
 
   private updatePrice(newPrice: number) {
-    const oldPrice = this.currentPrice;
     this.currentPrice = newPrice;
-    this.priceChangePercent = ((newPrice - oldPrice) / oldPrice) * 100;
     this.priceHistory.push(newPrice);
     if (this.priceHistory.length > 100) {
       this.priceHistory.shift();

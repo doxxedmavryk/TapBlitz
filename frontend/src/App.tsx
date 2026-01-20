@@ -8,6 +8,8 @@ import { Toaster } from 'react-hot-toast';
 import { useStore } from './store/useStore';
 import { walletService } from './services/wallet';
 import { contractsService } from './services/contracts';
+import { dexService } from './services/dex';
+import { NETWORKS, type NetworkId } from './config/networks';
 
 // Components
 import { TradingChart } from './components/trading/TradingChart';
@@ -55,8 +57,8 @@ function App() {
     setLeaderboard,
     connectWallet,
     config,
-    showLeaderboard,
-    showAchievements,
+    currentNetwork,
+    switchNetwork,
     toggleLeaderboard,
     toggleAchievements,
     toggleWalletModal,
@@ -234,12 +236,41 @@ function App() {
             </div>
 
             <div className="space-y-4">
-              {/* Network Info */}
+              {/* Network Toggle */}
               <div className="bg-[#252530] rounded-lg p-4">
-                <div className="text-sm text-gray-400 mb-1">Network</div>
-                <div className="font-medium flex items-center gap-2">
-                  <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                  Mavryk Mainnet
+                <div className="text-sm text-gray-400 mb-2">Network</div>
+                <div className="flex gap-2">
+                  {Object.values(NETWORKS).map((network) => {
+                    const isActive = currentNetwork === network.id;
+                    return (
+                      <button
+                        key={network.id}
+                        onClick={() => {
+                          if (!isActive) {
+                            switchNetwork(network.id as NetworkId);
+                            walletService.setNetwork(network.id as NetworkId);
+                            dexService.setNetwork(network.id as NetworkId);
+                          }
+                        }}
+                        className={`flex-1 py-2 px-3 rounded-lg font-medium transition-all ${
+                          isActive
+                            ? 'bg-pink-500 text-white'
+                            : 'bg-[#1A1A1F] text-gray-400 hover:bg-[#303040]'
+                        }`}
+                      >
+                        <div className="flex items-center justify-center gap-2">
+                          <span className={`w-2 h-2 rounded-full ${
+                            isActive ? 'bg-white' : network.isTestnet ? 'bg-yellow-500' : 'bg-green-500'
+                          }`}></span>
+                          <span className="text-sm">{network.isTestnet ? 'Testnet' : 'Mainnet'}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="text-xs text-gray-500 mt-2 text-center">
+                  {NETWORKS[currentNetwork].displayName}
+                  {NETWORKS[currentNetwork].isTestnet && ' (DEX Live)'}
                 </div>
               </div>
 

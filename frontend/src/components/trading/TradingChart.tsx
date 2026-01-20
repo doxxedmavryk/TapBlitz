@@ -7,7 +7,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { createChart, IChartApi, ISeriesApi, CandlestickData, LineStyle } from 'lightweight-charts';
 import { useStore } from '@/store/useStore';
-import { RiskProfile, PositionSide } from '@/types';
+import { PositionSide } from '@/types';
 import { contractsService } from '@/services/contracts';
 import { dexService, PriceData } from '@/services/dex';
 import { TradeConfirmationModal } from './TradeConfirmationModal';
@@ -225,14 +225,14 @@ export const TradingChart: React.FC<TradingChartProps> = ({
 
   // Handle chart click for tap-to-trade
   const handleChartClick = (event: MouseEvent) => {
-    if (!chartRef.current || !priceData || isProcessing) return;
+    if (!chartRef.current || !candleSeriesRef.current || !priceData || isProcessing) return;
 
     const rect = chartContainerRef.current!.getBoundingClientRect();
     const y = event.clientY - rect.top;
 
-    // Get price at clicked Y coordinate
-    const clickedPrice = chartRef.current.priceScale('right').coordinateToPrice(y);
-    if (!clickedPrice) return;
+    // Get price at clicked Y coordinate using series API
+    const clickedPrice = candleSeriesRef.current.coordinateToPrice(y);
+    if (clickedPrice === null) return;
 
     // Determine if it's a LONG or SHORT based on current price
     const currentPrice = priceData.price;
@@ -273,7 +273,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
 
       toast.loading('Opening position...', { id: 'trade-toast' });
 
-      const opHash = await contractsService.openPosition(tradeParams);
+      await contractsService.openPosition(tradeParams);
 
       toast.success(
         `Position opened! ${params.side.toUpperCase()} @ $${params.targetPrice.toFixed(4)}`,

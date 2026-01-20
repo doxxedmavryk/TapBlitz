@@ -25,7 +25,6 @@ interface TradingGridProps {
 
 export const TradingGrid: React.FC<TradingGridProps> = ({ onSettingsClick }) => {
   const {
-    walletAddress,
     isConnected,
     soundEnabled,
     animationsEnabled,

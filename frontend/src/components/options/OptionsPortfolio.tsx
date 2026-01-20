@@ -59,7 +59,7 @@ export const OptionsPortfolio: React.FC<OptionsPortfolioProps> = ({
     }
   };
 
-  const getStatusBadge = (status: string, payout?: number) => {
+  const getStatusBadge = (status: string, _payout?: number) => {
     switch (status) {
       case 'active':
         return (
