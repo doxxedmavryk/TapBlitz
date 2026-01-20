@@ -115,11 +115,21 @@ class WalletService {
         // Store NetworkType for later use
         (this as any).NetworkType = NetworkType;
 
-        log('DEBUG', 'Creating BeaconWallet instance...');
+        // Determine initial network type
+        const initialNetworkType = this.currentNetwork.id === 'atlasnet'
+          ? NetworkType.ATLASNET
+          : NetworkType.MAINNET;
+
+        log('DEBUG', 'Creating BeaconWallet instance...', {
+          network: this.currentNetwork.id,
+          networkType: initialNetworkType
+        });
+
         this.wallet = new BeaconWallet({
           name: 'TapBlitz',
           iconUrl: 'https://tapblitz.finance/icon.png',
           appUrl: 'https://tapblitz.finance',
+          preferredNetwork: initialNetworkType,
         });
         log('DEBUG', 'BeaconWallet created successfully');
 
@@ -168,15 +178,24 @@ class WalletService {
 
     try {
       const NetworkType = (this as any).NetworkType;
-      const networkType = this.currentNetwork.isTestnet ? NetworkType.CUSTOM : NetworkType.MAINNET;
-      log('DEBUG', 'Requesting permissions...', { network: this.networkName, rpcUrl: this.rpcUrl, type: networkType });
+      // Use proper Mavryk NetworkType - ATLASNET for testnet, MAINNET for mainnet
+      const networkType = this.currentNetwork.id === 'atlasnet'
+        ? NetworkType.ATLASNET
+        : NetworkType.MAINNET;
+
+      log('DEBUG', 'Requesting permissions...', {
+        network: this.networkName,
+        rpcUrl: this.rpcUrl,
+        type: networkType,
+        networkId: this.currentNetwork.id
+      });
+
       await this.wallet.requestPermissions({
         network: {
           type: networkType,
-          name: this.networkName,
           rpcUrl: this.rpcUrl,
         },
-      } as any); // Type assertion for Beacon SDK compatibility
+      });
       log('DEBUG', 'Permissions granted');
 
       const activeAccount = await this.wallet.client.getActiveAccount();
